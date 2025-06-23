@@ -1,0 +1,6 @@
+instruction_id,instruction_type,difficulty,v1_success,v2_success
+code_review_1,code_review,medium,0,0
+pr_creation_1,pr_creation,easy,0,0
+bug_fix_1,bug_fix,hard,0,0
+refactor_1,refactoring,easy,0,0
+test_case_1,test_creation,medium,0,0
