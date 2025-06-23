@@ -23,6 +23,9 @@ import matplotlib.pyplot as plt
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from rouge import Rouge
 
+# Load environment variables from .env before anything else
+load_dotenv()
+
 # Ensure the output directory exists
 os.makedirs("results", exist_ok=True)
 
@@ -554,24 +557,24 @@ def main():
         evaluator = AgentEvaluator(CONFIG)
         
         # Run evaluation
-        print("\n🚀 Starting evaluation...")
+        print("\n[START] Starting evaluation...")
         start_time = time.time()
         evaluator.run_evaluation()
         
         # Generate report
-        print("\n📊 Generating report...")
+        print("\n[REPORT] Generating report...")
         evaluator.generate_report()
         
         # Print completion message
         duration = time.time() - start_time
-        print(f"\n✅ Evaluation completed in {duration:.1f} seconds!")
-        print(f"📝 Report and results saved to: {os.path.abspath(CONFIG['results_dir'])}")
+        print(f"\n[DONE] Evaluation completed in {duration:.1f} seconds!")
+        print(f"[RESULTS] Report and results saved to: {os.path.abspath(CONFIG['results_dir'])}")
         
     except KeyboardInterrupt:
-        print("\n❌ Evaluation interrupted by user.")
+        print("\n[INTERRUPTED] Evaluation interrupted by user.")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ An error occurred: {str(e)}")
+        print(f"\n[ERROR] An error occurred: {str(e)}")
         logging.exception("Evaluation failed")
         sys.exit(1)
 
