@@ -1,0 +1,58 @@
+{
+  "instructions": [
+    {
+      "id": "code_review_1",
+      "type": "code_review",
+      "title": "Security Issue in Authentication",
+      "description": "Review the following authentication code for security vulnerabilities.",
+      "code": "def authenticate(username, password):\n    user = User.query.filter_by(username=username).first()\n    if user and user.password == password:\n        return True\n    return False",
+      "expected_response": "The code has a security vulnerability as it stores and compares plaintext passwords. It should use password hashing with salt.",
+      "difficulty": "medium"
+    },
+    {
+      "id": "pr_creation_1",
+      "type": "pr_creation",
+      "title": "Add Input Validation",
+      "description": "Create a pull request that adds input validation to the user registration form.",
+      "requirements": [
+        "Validate email format",
+        "Enforce strong password policy (min 12 chars, special chars, numbers)",
+        "Add server-side validation"
+      ],
+      "expected_response": "A pull request description with the changes made and testing instructions.",
+      "difficulty": "easy"
+    },
+    {
+      "id": "bug_fix_1",
+      "type": "bug_fix",
+      "title": "Fix Memory Leak in Data Processing",
+      "description": "The following code has a memory leak when processing large files. Identify and fix the issue.",
+      "code": "def process_file(filename):\n    file = open(filename)\n    data = file.read()\n    result = []\n    for line in data.split('\\n'):\n        result.append(process_line(line))\n    return result",
+      "expected_response": "The file handle is not being closed. Should use context manager (with statement) to ensure file is properly closed.",
+      "difficulty": "hard"
+    },
+    {
+      "id": "refactor_1",
+      "type": "refactoring",
+      "title": "Improve Function Readability",
+      "description": "Refactor the following function to improve its readability and maintainability.",
+      "code": "def calc(a,b,c,d,e,f):\n    x=(a*b)+(c*d)+(e*f)\n    y=(a+c+e)/3\n    z=(b+d+f)/3\n    return x,y,z",
+      "expected_response": "Function should be refactored with meaningful variable names, type hints, and better structure.",
+      "difficulty": "easy"
+    },
+    {
+      "id": "test_case_1",
+      "type": "test_creation",
+      "title": "Add Unit Tests for Authentication Service",
+      "description": "Create unit tests for the authentication service with 100% branch coverage.",
+      "requirements": [
+        "Test successful login",
+        "Test invalid credentials",
+        "Test account lockout after multiple failures",
+        "Test token generation and validation"
+      ],
+      "expected_response": "A set of unit tests covering all specified scenarios with assertions.",
+      "difficulty": "medium"
+    }
+  ]
+}
