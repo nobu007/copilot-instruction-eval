@@ -1,0 +1,61 @@
+{
+  "timestamp": "2025-06-23T22:56:50.952632",
+  "config": {
+    "agent_v1_endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash",
+    "agent_v2_endpoint": "https://api.groq.com/openai/v1/chat/completion/meta-llama/llama-4-maverick-17b-128e-instruct",
+    "api_key_v1": "",
+    "api_key_v2": "",
+    "instructions_file": "instructions.json",
+    "results_dir": "results",
+    "timeout": 60,
+    "max_retries": 3,
+    "retry_delay": 5
+  },
+  "results": [
+    {
+      "instruction_id": "code_review_1",
+      "instruction_type": "code_review",
+      "difficulty": "medium",
+      "v1_success": false,
+      "v2_success": false,
+      "v1_metrics": {},
+      "v2_metrics": {}
+    },
+    {
+      "instruction_id": "pr_creation_1",
+      "instruction_type": "pr_creation",
+      "difficulty": "easy",
+      "v1_success": false,
+      "v2_success": false,
+      "v1_metrics": {},
+      "v2_metrics": {}
+    },
+    {
+      "instruction_id": "bug_fix_1",
+      "instruction_type": "bug_fix",
+      "difficulty": "hard",
+      "v1_success": false,
+      "v2_success": false,
+      "v1_metrics": {},
+      "v2_metrics": {}
+    },
+    {
+      "instruction_id": "refactor_1",
+      "instruction_type": "refactoring",
+      "difficulty": "easy",
+      "v1_success": false,
+      "v2_success": false,
+      "v1_metrics": {},
+      "v2_metrics": {}
+    },
+    {
+      "instruction_id": "test_case_1",
+      "instruction_type": "test_creation",
+      "difficulty": "medium",
+      "v1_success": false,
+      "v2_success": false,
+      "v1_metrics": {},
+      "v2_metrics": {}
+    }
+  ]
+}
