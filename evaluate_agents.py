@@ -117,24 +117,44 @@ class AgentEvaluator:
 
     def _call_agent_with_retry(self, agent_version: str, instruction_text: str) -> Tuple[Optional[str], Optional[str]]:
         """Make API call with retry mechanism and return (response_text, error_message)."""
-        if agent_version == 'v2':
-            logger.warning(f"Skipping agent v2 as it is currently disabled.")
-            return None, "Agent v2 is disabled"
-
         endpoint = self.config[f"agent_{agent_version}_endpoint"]
         api_key = self.config[f"api_key_{agent_version}"]
-        
-        headers = {"Content-Type": "application/json"}
-        params = {'key': api_key}
-        payload = {
-            "contents": [{"parts": [{"text": instruction_text}]}]
-        }
+
+        headers = {}
+        params = {}
+        payload = {}
+
+        # API format differs for v1 (Google AI) and v2 (Groq/OpenAI)
+        if agent_version == 'v2':
+            # The endpoint in .env is incorrect, it contains the model. We parse it here.
+            url_parts = endpoint.split('/')
+            model_name = '/'.join(url_parts[7:]) if len(url_parts) > 7 else 'llama3-8b-8192'
+            correct_endpoint = "https://api.groq.com/openai/v1/chat/completions"
+
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "messages": [{"role": "user", "content": instruction_text}],
+                "model": model_name
+            }
+            endpoint = correct_endpoint
+            params = None
+        else:  # agent_version == 'v1'
+            headers = {"Content-Type": "application/json"}
+            params = {'key': api_key}
+            payload = {
+                "contents": [{"parts": [{"text": instruction_text}]}]
+            }
+
         last_error = None
 
         for attempt in range(self.config["max_retries"]):
             try:
                 logger.debug(f"--- API Request Details (Attempt {attempt + 1}) ---")
                 logger.debug(f"Agent: {agent_version}, URL: {endpoint}")
+                logger.debug(f"Headers: {headers}")
                 logger.debug(f"Params: {params}")
                 logger.debug(f"Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
 
@@ -146,7 +166,11 @@ class AgentEvaluator:
                     params=params
                 )
                 response.raise_for_status()
-                return response.json()["candidates"][0]["content"]["parts"][0]["text"], None
+
+                if agent_version == 'v2':
+                    return response.json()['choices'][0]['message']['content'], None
+                else:  # agent_version == 'v1'
+                    return response.json()["candidates"][0]["content"]["parts"][0]["text"], None
 
             except requests.exceptions.RequestException as e:
                 last_error = e
