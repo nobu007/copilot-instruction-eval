@@ -1,15 +1,15 @@
 # GitHub Copilot Agent Evaluation Report
 
-Generated at: 2025-06-23T22:56:51.000499
+Generated at: 2025-06-24T11:57:19.208274
 
 ## 📊 Summary
 
 | Metric | Value |
 |--------|-------|
 | Total Instructions | 5 |
-| Agent v1 Success Rate | 0.0% (0/5) |
+| Agent v1 Success Rate | 100.0% (5/5) |
 | Agent v2 Success Rate | 0.0% (0/5) |
-| Improvement | +0.0% points |
+| Improvement | -100.0% points |
 
 ## 📈 Success Rate Comparison
 
@@ -20,12 +20,12 @@ Generated at: 2025-06-23T22:56:51.000499
 ### Average Metrics
 | Metric | Agent v1 | Agent v2 | Difference |
 |--------|----------|----------|------------|
-| jaccard_similarity | 0.000 | 0.000 | +0.000 |
-| bleu_score | 0.000 | 0.000 | +0.000 |
-| rouge_1 | 0.000 | 0.000 | +0.000 |
-| rouge_2 | 0.000 | 0.000 | +0.000 |
-| rouge_l | 0.000 | 0.000 | +0.000 |
-| response_time (s) | 0.000 | 0.000 | +0.000 |
+| jaccard_similarity | 0.028 | 0.000 | -0.028 |
+| bleu_score | 0.002 | 0.000 | -0.002 |
+| rouge_1 | 0.052 | 0.000 | -0.052 |
+| rouge_2 | 0.007 | 0.000 | -0.007 |
+| rouge_l | 0.048 | 0.000 | -0.048 |
+| response_time (s) | 9.554 | 0.000 | -9.554 |
 
 ![Metrics Comparison](metrics_comparison.png)
 
@@ -35,11 +35,11 @@ Generated at: 2025-06-23T22:56:51.000499
 
 | ID | Type | Difficulty | v1 Success | v2 Success | v1 Jaccard | v2 Jaccard | v1 BLEU | v2 BLEU | v1 ROUGE-L | v2 ROUGE-L | v1 Time (s) | v2 Time (s) |
 |----|------|------------|------------|------------|------------|------------|---------|---------|------------|------------|-------------|-------------|
-| bug_fix_1 | bug_fix | hard | ❌ | ❌ | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.00 | 0.00 |
-| code_review_1 | code_review | medium | ❌ | ❌ | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.00 | 0.00 |
-| pr_creation_1 | pr_creation | easy | ❌ | ❌ | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.00 | 0.00 |
-| refactor_1 | refactoring | easy | ❌ | ❌ | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.00 | 0.00 |
-| test_case_1 | test_creation | medium | ❌ | ❌ | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.00 | 0.00 |
+| bug_fix_1 | bug_fix | hard | ✅ | ❌ | 0.030 | 0.000 | 0.003 | 0.000 | 0.040 | 0.000 | 6.18 | 0.00 |
+| code_review_1 | code_review | medium | ✅ | ❌ | 0.052 | 0.000 | 0.004 | 0.000 | 0.097 | 0.000 | 7.47 | 0.00 |
+| pr_creation_1 | pr_creation | easy | ✅ | ❌ | 0.013 | 0.000 | 0.002 | 0.000 | 0.024 | 0.000 | 14.00 | 0.00 |
+| refactor_1 | refactoring | easy | ✅ | ❌ | 0.032 | 0.000 | 0.003 | 0.000 | 0.056 | 0.000 | 6.98 | 0.00 |
+| test_case_1 | test_creation | medium | ✅ | ❌ | 0.010 | 0.000 | 0.001 | 0.000 | 0.026 | 0.000 | 13.13 | 0.00 |
 </details>
 
 ## ⚙️ Configuration
@@ -48,10 +48,10 @@ Generated at: 2025-06-23T22:56:51.000499
 
 ```json
 {
-  "agent_v1_endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash",
+  "agent_v1_endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
   "agent_v2_endpoint": "https://api.groq.com/openai/v1/chat/completion/meta-llama/llama-4-maverick-17b-128e-instruct",
-  "api_key_v1": "",
-  "api_key_v2": "",
+  "api_key_v1": "***REDACTED***",
+  "api_key_v2": "***REDACTED***",
   "instructions_file": "instructions.json",
   "results_dir": "results",
   "timeout": 60,
