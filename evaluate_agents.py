@@ -22,6 +22,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from rouge import Rouge
+import seaborn as sns
 
 # Load environment variables from .env before anything else
 load_dotenv()
@@ -105,49 +106,60 @@ class AgentEvaluator:
         """Create necessary directories for storing results."""
         os.makedirs(self.config["results_dir"], exist_ok=True)
 
-    def _call_agent_with_retry(self, instruction: Dict[str, Any], agent_version: str) -> Dict[str, Any]:
-        """Make API call with retry mechanism."""
+    def _get_sanitized_config(self) -> Dict[str, Any]:
+        """Return a copy of the config with sensitive values removed."""
+        sanitized_config = self.config.copy()
+        if "api_key_v1" in sanitized_config:
+            sanitized_config["api_key_v1"] = "***REDACTED***"
+        if "api_key_v2" in sanitized_config:
+            sanitized_config["api_key_v2"] = "***REDACTED***"
+        return sanitized_config
+
+    def _call_agent_with_retry(self, agent_version: str, instruction_text: str) -> Tuple[Optional[str], Optional[str]]:
+        """Make API call with retry mechanism and return (response_text, error_message)."""
+        if agent_version == 'v2':
+            logger.warning(f"Skipping agent v2 as it is currently disabled.")
+            return None, "Agent v2 is disabled"
+
         endpoint = self.config[f"agent_{agent_version}_endpoint"]
         api_key = self.config[f"api_key_{agent_version}"]
         
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
+        headers = {"Content-Type": "application/json"}
+        params = {'key': api_key}
         payload = {
-            "instruction": instruction["description"],
-            "code": instruction.get("code", ""),
-            "requirements": instruction.get("requirements", []),
-            "metadata": {
-                "instruction_id": instruction["id"],
-                "type": instruction["type"],
-                "difficulty": instruction["difficulty"]
-            }
+            "contents": [{"parts": [{"text": instruction_text}]}]
         }
-        
         last_error = None
+
         for attempt in range(self.config["max_retries"]):
             try:
+                logger.debug(f"--- API Request Details (Attempt {attempt + 1}) ---")
+                logger.debug(f"Agent: {agent_version}, URL: {endpoint}")
+                logger.debug(f"Params: {params}")
+                logger.debug(f"Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
+
                 response = requests.post(
                     endpoint,
                     headers=headers,
                     json=payload,
-                    timeout=self.config["timeout"]
+                    timeout=self.config["timeout"],
+                    params=params
                 )
                 response.raise_for_status()
-                return {"success": True, "response": response.json()}
+                return response.json()["candidates"][0]["content"]["parts"][0]["text"], None
+
             except requests.exceptions.RequestException as e:
                 last_error = e
-                if attempt < self.config["max_retries"] - 1:
-                    wait_time = self.config["retry_delay"] * (attempt + 1)
-                    logger.warning(
-                        f"Attempt {attempt + 1} failed for {agent_version}. "
-                        f"Retrying in {wait_time} seconds... Error: {e}"
-                    )
-                    time.sleep(wait_time)
-        
-        return {"success": False, "error": f"Failed after {self.config['max_retries']} attempts: {str(last_error)}"}
+                wait_time = self.config["retry_delay"] * (2 ** attempt)
+                logger.warning(
+                    f"Attempt {attempt + 1} failed for {agent_version}. "
+                    f"Retrying in {wait_time} seconds... Error: {e}"
+                )
+                time.sleep(wait_time)
+
+        error_message = f"Failed after {self.config['max_retries']} attempts: {str(last_error)}"
+        logger.error(f"Error with {agent_version}: {error_message}")
+        return None, error_message
 
     def _calculate_metrics(self, response: str, expected: str) -> Dict[str, float]:
         """Calculate evaluation metrics for the response."""
@@ -235,24 +247,32 @@ class AgentEvaluator:
         """Evaluate a single instruction with the specified agent version."""
         result = {"success": False}
         
-        # Call the agent with retry
+        prompt_parts = []
+        if instruction.get("description"):
+            prompt_parts.append(instruction["description"])
+        if instruction.get("code"):
+            prompt_parts.append(f'\n\n```\n{instruction["code"]}\n```')
+        if instruction.get("requirements"):
+            req_text = "\n".join(f'- {r}' for r in instruction["requirements"])
+            prompt_parts.append(f'\n\nRequirements:\n{req_text}')
+        instruction_text = "\n".join(prompt_parts)
+
         start_time = time.time()
-        response = self._call_agent_with_retry(instruction, agent_version)
+        response_text, error = self._call_agent_with_retry(agent_version, instruction_text)
         duration = time.time() - start_time
         
-        if response["success"]:
-            # Calculate metrics if we have an expected response
+        if error is None and response_text is not None:
+            result["success"] = True
             if "expected_response" in instruction:
                 metrics = self._calculate_metrics(
-                    response["response"].get("text", ""),
+                    response_text,
                     instruction["expected_response"]
                 )
                 metrics["response_time"] = duration
                 result["metrics"] = metrics
-            result["success"] = True
             logger.info(f"  {agent_version} completed in {duration:.2f}s")
         else:
-            error_msg = f"Error with {agent_version}: {response.get('error', 'Unknown error')}"
+            error_msg = f"Error with {agent_version}: {error or 'Unknown error'}"
             logger.error(f"  {error_msg}")
             result["error"] = error_msg
         
@@ -265,7 +285,7 @@ class AgentEvaluator:
         with open(results_file, "w", encoding="utf-8") as f:
             json.dump({
                 "timestamp": datetime.now().isoformat(),
-                "config": self.config,
+                "config": self._get_sanitized_config(),
                 "results": self.results
             }, f, indent=2, ensure_ascii=False)
         
@@ -391,10 +411,7 @@ class AgentEvaluator:
             f.write("<details>")
             f.write("<summary>Click to view evaluation configuration</summary>\n\n")
             f.write("```json\n")
-            f.write(json.dumps({
-                k: v for k, v in self.config.items() 
-                if not k.endswith("api_key")  # Don't log API keys
-            }, indent=2))
+            f.write(json.dumps(self._get_sanitized_config(), indent=2))
             f.write("\n```\n")
             f.write("</details>\n")
         
@@ -420,7 +437,7 @@ class AgentEvaluator:
             import numpy as np
             
             # Set style
-            plt.style.use('seaborn')
+            sns.set_theme(style="whitegrid")
             
             # 1. Success Rate Comparison
             total = len(self.results)
