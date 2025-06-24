@@ -1,6 +1,6 @@
 # GitHub Copilot Agent Evaluation Report
 
-Generated at: 2025-06-24T11:57:19.208274
+Generated at: 2025-06-24T12:25:40.198186
 
 ## 📊 Summary
 
@@ -20,12 +20,12 @@ Generated at: 2025-06-24T11:57:19.208274
 ### Average Metrics
 | Metric | Agent v1 | Agent v2 | Difference |
 |--------|----------|----------|------------|
-| jaccard_similarity | 0.028 | 0.000 | -0.028 |
+| jaccard_similarity | 0.024 | 0.000 | -0.024 |
 | bleu_score | 0.002 | 0.000 | -0.002 |
-| rouge_1 | 0.052 | 0.000 | -0.052 |
-| rouge_2 | 0.007 | 0.000 | -0.007 |
-| rouge_l | 0.048 | 0.000 | -0.048 |
-| response_time (s) | 9.554 | 0.000 | -9.554 |
+| rouge_1 | 0.045 | 0.000 | -0.045 |
+| rouge_2 | 0.008 | 0.000 | -0.008 |
+| rouge_l | 0.042 | 0.000 | -0.042 |
+| response_time (s) | 10.282 | 0.000 | -10.282 |
 
 ![Metrics Comparison](metrics_comparison.png)
 
@@ -35,11 +35,11 @@ Generated at: 2025-06-24T11:57:19.208274
 
 | ID | Type | Difficulty | v1 Success | v2 Success | v1 Jaccard | v2 Jaccard | v1 BLEU | v2 BLEU | v1 ROUGE-L | v2 ROUGE-L | v1 Time (s) | v2 Time (s) |
 |----|------|------------|------------|------------|------------|------------|---------|---------|------------|------------|-------------|-------------|
-| bug_fix_1 | bug_fix | hard | ✅ | ❌ | 0.030 | 0.000 | 0.003 | 0.000 | 0.040 | 0.000 | 6.18 | 0.00 |
-| code_review_1 | code_review | medium | ✅ | ❌ | 0.052 | 0.000 | 0.004 | 0.000 | 0.097 | 0.000 | 7.47 | 0.00 |
-| pr_creation_1 | pr_creation | easy | ✅ | ❌ | 0.013 | 0.000 | 0.002 | 0.000 | 0.024 | 0.000 | 14.00 | 0.00 |
-| refactor_1 | refactoring | easy | ✅ | ❌ | 0.032 | 0.000 | 0.003 | 0.000 | 0.056 | 0.000 | 6.98 | 0.00 |
-| test_case_1 | test_creation | medium | ✅ | ❌ | 0.010 | 0.000 | 0.001 | 0.000 | 0.026 | 0.000 | 13.13 | 0.00 |
+| bug_fix_1 | bug_fix | hard | ✅ | ❌ | 0.037 | 0.000 | 0.004 | 0.000 | 0.067 | 0.000 | 4.71 | 0.00 |
+| code_review_1 | code_review | medium | ✅ | ❌ | 0.036 | 0.000 | 0.003 | 0.000 | 0.074 | 0.000 | 9.05 | 0.00 |
+| pr_creation_1 | pr_creation | easy | ✅ | ❌ | 0.008 | 0.000 | 0.001 | 0.000 | 0.016 | 0.000 | 18.27 | 0.00 |
+| refactor_1 | refactoring | easy | ✅ | ❌ | 0.026 | 0.000 | 0.002 | 0.000 | 0.034 | 0.000 | 4.54 | 0.00 |
+| test_case_1 | test_creation | medium | ✅ | ❌ | 0.013 | 0.000 | 0.001 | 0.000 | 0.022 | 0.000 | 14.84 | 0.00 |
 </details>
 
 ## ⚙️ Configuration
