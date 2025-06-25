@@ -1,0 +1,14 @@
+{
+  "login": {
+    "username": "#login_field",
+    "password": "#password",
+    "submit": "input[name='commit']"
+  },
+  "chat": {
+    "input": "textarea[placeholder*='Ask Copilot']",
+    "submitButton": "button[aria-label='Send']",
+    "thinkingIndicator": ".monaco-progress-container",
+    "responseContainer": ".agent-turn",
+    "responseElement": ".markdown-body"
+  }
+}
