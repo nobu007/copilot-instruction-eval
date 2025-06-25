@@ -11,3 +11,5 @@ black>=23.3.0
 flake8>=6.0.0
 rouge
 seaborn
+selenium>=4.0.0
+webdriver-manager>=4.0.0
