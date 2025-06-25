@@ -1,8 +1,9 @@
 {
-  "timestamp": "2025-06-24T12:25:39.727874",
+  "timestamp": "2025-06-25T19:51:11.720753",
   "config": {
     "agent_v1_endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-    "agent_v2_endpoint": "https://api.groq.com/openai/v1/chat/completion/meta-llama/llama-4-maverick-17b-128e-instruct",
+    "agent_v2_endpoint": "https://api.groq.com/openai/v1/chat/completions/meta-llama/llama-4-maverick-17b-128e-instruct",
+    "agent_v2_model": null,
     "api_key_v1": "***REDACTED***",
     "api_key_v2": "***REDACTED***",
     "instructions_file": "instructions.json",
@@ -17,95 +18,145 @@
       "instruction_type": "code_review",
       "difficulty": "medium",
       "v1_success": true,
-      "v2_success": false,
+      "v2_success": true,
       "v1_metrics": {
-        "response_length": 6371,
+        "response_length": 5892,
         "expected_length": 126,
-        "length_ratio": 50.56349206349206,
-        "jaccard_similarity": 0.035634743875278395,
-        "bleu_score": 0.0029824938792256464,
-        "rouge_1": 0.07802874664564088,
-        "rouge_2": 0.009592325693833444,
-        "rouge_l": 0.07392197046494273,
-        "response_time": 9.049956560134888
+        "length_ratio": 46.76190476190476,
+        "jaccard_similarity": 0.03712871287128713,
+        "bleu_score": 0.004027397976620504,
+        "rouge_1": 0.0765765757162568,
+        "rouge_2": 0.013568520528896181,
+        "rouge_l": 0.0765765757162568,
+        "response_time": 8.637922286987305
       },
-      "v2_metrics": {}
+      "v2_metrics": {
+        "response_length": 2765,
+        "expected_length": 126,
+        "length_ratio": 21.944444444444443,
+        "jaccard_similarity": 0.04739336492890995,
+        "bleu_score": 0.003885058027132025,
+        "rouge_1": 0.10041840850825441,
+        "rouge_2": 0.011173183352423548,
+        "rouge_l": 0.10041840850825441,
+        "response_time": 1.3768107891082764
+      }
     },
     {
       "instruction_id": "pr_creation_1",
       "instruction_type": "pr_creation",
       "difficulty": "easy",
       "v1_success": true,
-      "v2_success": false,
+      "v2_success": true,
       "v1_metrics": {
-        "response_length": 14882,
+        "response_length": 14292,
         "expected_length": 74,
-        "length_ratio": 201.1081081081081,
-        "jaccard_similarity": 0.00847457627118644,
-        "bleu_score": 0.0008528263926582184,
-        "rouge_1": 0.01594533004869734,
-        "rouge_2": 0.0037712129486216703,
-        "rouge_l": 0.01594533004869734,
-        "response_time": 18.267322778701782
+        "length_ratio": 193.13513513513513,
+        "jaccard_similarity": 0.011204481792717087,
+        "bleu_score": 0.00110943542339991,
+        "rouge_1": 0.018543046070470595,
+        "rouge_2": 0.003072196468153693,
+        "rouge_l": 0.018543046070470595,
+        "response_time": 17.829128742218018
       },
-      "v2_metrics": {}
+      "v2_metrics": {
+        "response_length": 5259,
+        "expected_length": 74,
+        "length_ratio": 71.06756756756756,
+        "jaccard_similarity": 0.03543307086614173,
+        "bleu_score": 0.0016777949346644047,
+        "rouge_1": 0.03424657461742355,
+        "rouge_2": 0.003999999608000039,
+        "rouge_l": 0.03424657461742355,
+        "response_time": 2.021135091781616
+      }
     },
     {
       "instruction_id": "bug_fix_1",
       "instruction_type": "bug_fix",
       "difficulty": "hard",
       "v1_success": true,
-      "v2_success": false,
+      "v2_success": true,
       "v1_metrics": {
-        "response_length": 3744,
+        "response_length": 4267,
         "expected_length": 115,
-        "length_ratio": 32.55652173913043,
-        "jaccard_similarity": 0.03690036900369004,
-        "bleu_score": 0.004379075896324774,
-        "rouge_1": 0.06688963109405936,
-        "rouge_2": 0.024390243197501507,
-        "rouge_l": 0.06688963109405936,
-        "response_time": 4.708457708358765
+        "length_ratio": 37.10434782608696,
+        "jaccard_similarity": 0.02280130293159609,
+        "bleu_score": 0.00438997644394143,
+        "rouge_1": 0.043076922140781085,
+        "rouge_2": 0.010771992193238369,
+        "rouge_l": 0.043076922140781085,
+        "response_time": 6.033195972442627
       },
-      "v2_metrics": {}
+      "v2_metrics": {
+        "response_length": 2284,
+        "expected_length": 115,
+        "length_ratio": 19.860869565217392,
+        "jaccard_similarity": 0.05235602094240838,
+        "bleu_score": 0.007588473734019455,
+        "rouge_1": 0.0845070408640261,
+        "rouge_2": 0.03508771830101572,
+        "rouge_l": 0.0845070408640261,
+        "response_time": 1.1870465278625488
+      }
     },
     {
       "instruction_id": "refactor_1",
       "instruction_type": "refactoring",
       "difficulty": "easy",
       "v1_success": true,
-      "v2_success": false,
+      "v2_success": true,
       "v1_metrics": {
-        "response_length": 2767,
+        "response_length": 3592,
         "expected_length": 95,
-        "length_ratio": 29.126315789473683,
-        "jaccard_similarity": 0.02631578947368421,
-        "bleu_score": 0.0016118366817981058,
-        "rouge_1": 0.04219409179013338,
+        "length_ratio": 37.810526315789474,
+        "jaccard_similarity": 0.02054794520547945,
+        "bleu_score": 0.0013230109330204605,
+        "rouge_1": 0.03921568546093385,
         "rouge_2": 0.0,
-        "rouge_l": 0.03375527322473254,
-        "response_time": 4.544499397277832
+        "rouge_l": 0.03267973774851555,
+        "response_time": 6.226603269577026
       },
-      "v2_metrics": {}
+      "v2_metrics": {
+        "response_length": 1901,
+        "expected_length": 95,
+        "length_ratio": 20.010526315789473,
+        "jaccard_similarity": 0.03870967741935484,
+        "bleu_score": 0.003422869228665051,
+        "rouge_1": 0.06024096241181598,
+        "rouge_2": 0.008368199883055379,
+        "rouge_l": 0.06024096241181598,
+        "response_time": 1.3078501224517822
+      }
     },
     {
       "instruction_id": "test_case_1",
       "instruction_type": "test_creation",
       "difficulty": "medium",
       "v1_success": true,
-      "v2_success": false,
+      "v2_success": true,
       "v1_metrics": {
-        "response_length": 11860,
+        "response_length": 14926,
         "expected_length": 69,
-        "length_ratio": 171.8840579710145,
-        "jaccard_similarity": 0.013307984790874524,
-        "bleu_score": 0.0006206447408486637,
-        "rouge_1": 0.02177858400071147,
+        "length_ratio": 216.31884057971016,
+        "jaccard_similarity": 0.009025270758122744,
+        "bleu_score": 0.000523802683174702,
+        "rouge_1": 0.017152658291854115,
         "rouge_2": 0.0,
-        "rouge_l": 0.02177858400071147,
-        "response_time": 14.841153383255005
+        "rouge_l": 0.017152658291854115,
+        "response_time": 20.54578733444214
       },
-      "v2_metrics": {}
+      "v2_metrics": {
+        "response_length": 5941,
+        "expected_length": 69,
+        "length_ratio": 86.10144927536231,
+        "jaccard_similarity": 0.025974025974025976,
+        "bleu_score": 0.002138867711866739,
+        "rouge_1": 0.048979590979092054,
+        "rouge_2": 0.0049261078939067185,
+        "rouge_l": 0.048979590979092054,
+        "response_time": 2.131324052810669
+      }
     }
   ]
 }
