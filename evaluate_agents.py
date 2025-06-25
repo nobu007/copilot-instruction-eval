@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 CONFIG = {
     "agent_v1_endpoint": os.getenv("AGENT_V1_ENDPOINT"),
     "agent_v2_endpoint": os.getenv("AGENT_V2_ENDPOINT"),
+    "agent_v2_model": os.getenv("AGENT_V2_MODEL"),
     "api_key_v1": os.getenv("AGENT_V1_API_KEY"),
     "api_key_v2": os.getenv("AGENT_V2_API_KEY"),
     "instructions_file": "instructions.json",
@@ -117,20 +118,27 @@ class AgentEvaluator:
 
     def _call_agent_with_retry(self, agent_version: str, instruction_text: str) -> Tuple[Optional[str], Optional[str]]:
         """Make API call with retry mechanism and return (response_text, error_message)."""
-        endpoint = self.config[f"agent_{agent_version}_endpoint"]
         api_key = self.config[f"api_key_{agent_version}"]
-
         headers = {}
         params = {}
         payload = {}
+        endpoint = self.config[f"agent_{agent_version}_endpoint"]
 
         # API format differs for v1 (Google AI) and v2 (Groq/OpenAI)
         if agent_version == 'v2':
-            # The endpoint in .env is incorrect, it contains the model. We parse it here.
-            url_parts = endpoint.split('/')
-            model_name = '/'.join(url_parts[7:]) if len(url_parts) > 7 else 'llama3-8b-8192'
-            correct_endpoint = "https://api.groq.com/openai/v1/chat/completions"
-
+            model_name = self.config.get("agent_v2_model")
+            # If model is not in config, try to parse from endpoint URL as a fallback
+            if not model_name:
+                url_parts = endpoint.split('/')
+                if len(url_parts) > 7 and url_parts[6] == 'completions':
+                    model_name = '/'.join(url_parts[7:])
+                    logger.info(f"AGENT_V2_MODEL not set, parsed model '{model_name}' from endpoint URL.")
+                else:
+                    model_name = 'llama3-8b-8192' # Fallback to a default model
+                    logger.warning(f"AGENT_V2_MODEL not set and couldn't parse from URL. Using default model: {model_name}")
+            
+            # V2 always uses the same base endpoint
+            endpoint = "https://api.groq.com/openai/v1/chat/completions"
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
@@ -139,8 +147,7 @@ class AgentEvaluator:
                 "messages": [{"role": "user", "content": instruction_text}],
                 "model": model_name
             }
-            endpoint = correct_endpoint
-            params = None
+            params = None # No URL params for OpenAI-compatible APIs
         else:  # agent_version == 'v1'
             headers = {"Content-Type": "application/json"}
             params = {'key': api_key}
@@ -149,7 +156,6 @@ class AgentEvaluator:
             }
 
         last_error = None
-
         for attempt in range(self.config["max_retries"]):
             try:
                 logger.debug(f"--- API Request Details (Attempt {attempt + 1}) ---")
@@ -565,20 +571,19 @@ class AgentEvaluator:
                 ax.set_xticks(x)
                 ax.set_xticklabels(['Agent v1', 'Agent v2'])
                 ax.legend()
-                
-                # Add value labels
-                def autolabel(rects):
-                    for rect in rects:
-                        height = rect.get_height()
-                        ax.annotate(f'{height:.2f}±{rect.get_yerr():.2f}s',
-                                  xy=(rect.get_x() + rect.get_width() / 2, height),
-                                  xytext=(0, 3),  # 3 points vertical offset
-                                  textcoords="offset points",
-                                  ha='center', va='bottom')
-                
-                autolabel(rects1)
-                autolabel(rects2)
-                
+
+                # Annotate bars with mean and std dev
+                ax.annotate(f'{v1_mean:.2f} ± {v1_std:.2f}s',
+                            xy=(rects1[0].get_x() + rects1[0].get_width() / 2, v1_mean),
+                            xytext=(0, 3),  # 3 points vertical offset
+                            textcoords="offset points",
+                            ha='center', va='bottom')
+                ax.annotate(f'{v2_mean:.2f} ± {v2_std:.2f}s',
+                            xy=(rects2[0].get_x() + rects2[0].get_width() / 2, v2_mean),
+                            xytext=(0, 3),  # 3 points vertical offset
+                            textcoords="offset points",
+                            ha='center', va='bottom')
+
                 plt.tight_layout()
                 plt.savefig(os.path.join(self.config["results_dir"], "response_time_comparison.png"))
                 plt.close()
