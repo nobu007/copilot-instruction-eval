@@ -1,0 +1,24 @@
+{
+  "name": "copilot-instruction-eval-node",
+  "version": "1.0.0",
+  "description": "Puppeteer script for evaluating GitHub Copilot Agent custom instructions.",
+  "main": "evaluation_script.js",
+  "scripts": {
+    "start": "node evaluation_script.js",
+    "dry-run": "node evaluation_script.js --headless=false --max-prompts=2",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "puppeteer",
+    "github",
+    "copilot",
+    "evaluation"
+  ],
+  "author": "Cascade Agent",
+  "license": "MIT",
+  "dependencies": {
+    "papaparse": "^5.4.1",
+    "puppeteer": "^22.12.1",
+    "dotenv": "^16.4.5"
+  }
+}
