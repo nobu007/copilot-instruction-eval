@@ -1,0 +1,5 @@
+id,category,prompt
+1,code_generation,"Reactでカウンターコンポーネントを作成してください"
+2,code_explanation,"以下のPythonコードの機能を説明してください:\n\nimport os\n\ndef list_files(path):\n    return [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]"
+3,creative_writing,"AIが人間と共存する未来についての短い物語を書いてください"
+4,translation,"'The quick brown fox jumps over the lazy dog.'を日本語に翻訳してください"
