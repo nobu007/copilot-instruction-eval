@@ -5,10 +5,11 @@
     "submit": "input[name='commit']"
   },
   "chat": {
-    "input": "textarea[placeholder*='Ask Copilot']",
-    "submitButton": "button[aria-label='Send']",
-    "thinkingIndicator": ".monaco-progress-container",
-    "responseContainer": ".agent-turn",
-    "responseElement": ".markdown-body"
+    "launcher": "a.action-label[aria-label='チャットの切り替え']",
+    "input": "div.interactive-input-part textarea",
+    "submitButton": "a.action-label[aria-label='送信 (Enter)']",
+    "thinkingIndicator": "div.monaco-progress-container",
+    "responseContainer": "div[class*='interactive-response-part']",
+    "responseElement": "div.monaco-markdown"
   }
 }
