@@ -22,24 +22,67 @@ import threading
 class InterruptedException(Exception):
     pass
 
-# --- GUI Stop Button --- 
-def create_stop_button_window(stop_event):
-    """Creates and runs a simple Tkinter window with a stop button."""
-    def on_stop():
-        logger.info("STOP button pressed. Signaling main thread to terminate.")
-        stop_event.set()
-        root.destroy()
+# --- Shared State & GUI Control ---
+class SharedState:
+    """A simple class to share state between the main and GUI threads."""
+    def __init__(self):
+        self.status = "Initializing..."
+        self.progress = ""
+        self.stop_event = threading.Event()
 
+def create_stop_button_window(shared_state):
+    """Creates and runs a robust Tkinter window for script control."""
+    
     root = tk.Tk()
+    after_id = None
+
+    def on_stop():
+        """Handles stop events safely, preventing race conditions."""
+        nonlocal after_id
+        logger.info("STOP signal received. Terminating GUI.")
+        
+        if after_id:
+            root.after_cancel(after_id)
+            after_id = None
+
+        shared_state.stop_event.set()
+        
+        if root.winfo_exists():
+            root.destroy()
+
+    def update_labels():
+        """Periodically updates GUI labels from the shared state."""
+        nonlocal after_id
+        
+        if shared_state.stop_event.is_set() or not root.winfo_exists():
+            return
+
+        try:
+            status_label.config(text=shared_state.status)
+            progress_label.config(text=shared_state.progress)
+        except tk.TclError:
+            # This can happen if the window is destroyed between the check and the config call
+            return
+        
+        after_id = root.after(250, update_labels)
+
     root.title("Script Control")
-    root.geometry("250x100")
-    root.protocol("WM_DELETE_WINDOW", on_stop) # Handle window close
+    root.geometry("350x150")
+    root.protocol("WM_DELETE_WINDOW", on_stop)
 
-    label = ttk.Label(root, text="Selenium script is running.")
-    label.pack(pady=10)
+    main_frame = ttk.Frame(root, padding="10")
+    main_frame.pack(fill=tk.BOTH, expand=True)
 
-    stop_button = ttk.Button(root, text="STOP SCRIPT", command=on_stop)
-    stop_button.pack(pady=10)
+    status_label = ttk.Label(main_frame, text="Initializing...", font=("Segoe UI", 10))
+    status_label.pack(pady=5, anchor='w')
+
+    progress_label = ttk.Label(main_frame, text="", font=("Segoe UI", 10))
+    progress_label.pack(pady=5, anchor='w')
+
+    stop_button = ttk.Button(main_frame, text="STOP SCRIPT", command=on_stop)
+    stop_button.pack(pady=20)
+    
+    update_labels()
     
     root.mainloop()
 
@@ -94,7 +137,7 @@ def setup_driver(port):
         return None
 
 # --- Copilot Agent操作 ---
-def safe_find_and_act(driver, selector, action_func, stop_event, retries=3, delay=1, wait_condition=EC.element_to_be_clickable):
+def safe_find_and_act(driver, selector, action_func, shared_state, retries=3, delay=1, wait_condition=EC.element_to_be_clickable):
     """
     Safely finds an element and performs an action, with retries for common exceptions.
     """
@@ -106,57 +149,51 @@ def safe_find_and_act(driver, selector, action_func, stop_event, retries=3, dela
             action_func(element)
             return True
         except (StaleElementReferenceException, InvalidElementStateException, TimeoutException, NoSuchElementException) as e:
-            if stop_event.is_set(): raise InterruptedException("Stop signal received during action.")
+            if shared_state.stop_event.is_set(): raise InterruptedException("Stop signal received during action.")
             logger.warning(f"Action on selector '{selector}' failed (attempt {i+1}/{retries}): {type(e).__name__}. Retrying in {delay}s...")
             time.sleep(delay)
     logger.error(f"Action on selector '{selector}' failed after {retries} retries.")
     return False
 
-def wait_for_response_with_progress(driver, timeout, selector, initial_count, stop_event):
+def wait_for_response_with_progress(driver, timeout, selector, initial_count, shared_state):
     """
-    Waits for the number of elements matching the selector to be greater than initial_count.
-    Provides progress logging and is interruptible.
+    Waits for a new element to appear, updating the GUI with progress.
     """
-    logger.info(f"Waiting for new element to appear for selector: '{selector}'")
     start_time = time.time()
     while time.time() - start_time < timeout:
-        elapsed = int(time.time() - start_time)
-        # Use carriage return to show progress on a single line in the terminal
-        print(f"  ... waiting for response ... {elapsed}s / {timeout}s", end='\r')
-
-        if stop_event.is_set():
-            print()
+        if shared_state.stop_event.is_set():
             raise InterruptedException("Stop signal received during wait.")
+
+        elapsed = int(time.time() - start_time)
+        shared_state.status = f"Waiting for response... {elapsed}s / {timeout}s"
         
         current_count = len(driver.find_elements(By.CSS_SELECTOR, selector))
         if current_count > initial_count:
-            print() # Newline after progress bar
             logger.info(f"New element found. Total count: {current_count}")
             return True
         
-        time.sleep(1)
+        time.sleep(0.5) # Check twice a second
     
-    print() # Newline after progress bar
     return False
 
-def evaluate_prompt(driver, prompt_id, prompt_text, stop_event, debug_pause=False, prompt_index=0, total_prompts=0):
-    progress_str = f"({prompt_index}/{total_prompts})" if total_prompts > 0 else ""
-    logger.info(f"--- Starting evaluation for prompt ID: {prompt_id} {progress_str} ---")
+def evaluate_prompt(driver, prompt_id, prompt_text, shared_state, debug_pause=False, prompt_index=0, total_prompts=0):
+    shared_state.progress = f"Prompt ({prompt_index}/{total_prompts})"
+    logger.info(f"--- Starting evaluation for prompt ID: {prompt_id} {shared_state.progress} ---")
     start_time = time.time()
     try:
         # 1. Open the chat panel if not already open.
-        logger.info("Step 1/3: Checking chat panel state...")
+        shared_state.status = "Step 1/3: Checking chat panel..."
         try:
             driver.find_element(By.CSS_SELECTOR, SELECTORS['chat']['input'])
             logger.info("...Chat panel is already open.")
         except NoSuchElementException:
             logger.info("...Chat panel is closed. Attempting to open.")
-            if not safe_find_and_act(driver, SELECTORS['chat']['launcher'], lambda el: el.click(), stop_event):
+            if not safe_find_and_act(driver, SELECTORS['chat']['launcher'], lambda el: el.click(), shared_state):
                 raise Exception("Failed to click chat launcher to open panel.")
             logger.info("...Chat panel opened successfully.")
 
         # 2. Input the prompt and submit by sending the Enter key.
-        logger.info("Step 2/3: Inputting prompt and submitting...")
+        shared_state.status = "Step 2/3: Inputting prompt..."
         initial_response_count = len(driver.find_elements(By.CSS_SELECTOR, SELECTORS['chat']['responseContainer']))
 
         def js_input_and_submit_action(element):
@@ -169,16 +206,17 @@ def evaluate_prompt(driver, prompt_id, prompt_text, stop_event, debug_pause=Fals
             # Submit by sending the Enter key, the most reliable method for chat inputs.
             element.send_keys(Keys.ENTER)
 
-        if not safe_find_and_act(driver, SELECTORS['chat']['input'], js_input_and_submit_action, stop_event, wait_condition=EC.presence_of_element_located):
+        if not safe_find_and_act(driver, SELECTORS['chat']['input'], js_input_and_submit_action, shared_state, wait_condition=EC.presence_of_element_located):
             raise Exception("Failed to input prompt and submit with Enter key.")
         logger.info("...Prompt text input and submitted successfully.")
 
         if debug_pause:
+            shared_state.status = "Debug pause: inspect browser."
             input("\n>>> DEBUG MODE: Prompt submitted. Please inspect the browser now. Press Enter to continue...\n")
 
         # 3. Wait for and process the response.
-        logger.info(f"Step 3/3: Waiting for new response (initial count: {initial_response_count})...")
-        if not wait_for_response_with_progress(driver, 60, SELECTORS['chat']['responseContainer'], initial_response_count, stop_event):
+        shared_state.status = f"Step 3/3: Waiting for response... (max 60s)"
+        if not wait_for_response_with_progress(driver, 60, SELECTORS['chat']['responseContainer'], initial_response_count, shared_state):
             raise TimeoutException(f"Timeout while waiting for response to prompt ID: {prompt_id}")
         logger.info("...New response container detected.")
         end_time = time.time()
@@ -199,11 +237,11 @@ def evaluate_prompt(driver, prompt_id, prompt_text, stop_event, debug_pause=Fals
         logger.info(f"Saved screenshot to error_prompt_{prompt_id}_timeout.png")
         return None, None, error_message
     except Exception as e:
-        error_message = f"An error occurred for prompt ID {prompt_id}: {e}"
-        logger.error(error_message)
+        logger.error(f"An error occurred for prompt ID {prompt_id}: {e}")
+        shared_state.status = f"Error on prompt {prompt_id}"
         driver.save_screenshot(f'error_prompt_{prompt_id}_exception.png')
         logger.info(f"Saved screenshot to error_prompt_{prompt_id}_exception.png")
-        return None, None, str(e)
+        return None, 0, str(e)
 
 # --- ログ書き込み ---
 def log_result(result):
@@ -318,10 +356,10 @@ def dump_all_selectors(driver):
 
 # --- メイン処理 ---
 def main():
-    stop_event = threading.Event()
+    shared_state = SharedState()
 
     # Start the GUI in a separate thread
-    gui_thread = threading.Thread(target=create_stop_button_window, args=(stop_event,), daemon=True)
+    gui_thread = threading.Thread(target=create_stop_button_window, args=(shared_state,), daemon=True)
     gui_thread.start()
     logger.info("Starting GUI evaluation script.")
 
@@ -404,7 +442,7 @@ def main():
                 driver.execute_script("arguments[0].value = arguments[1];", element, "Hello, this is a test.")
                 driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", element)
             
-            if not safe_find_and_act(driver, SELECTORS['chat']['input'], js_input_action, stop_event, wait_condition=EC.presence_of_element_located):
+            if not safe_find_and_act(driver, SELECTORS['chat']['input'], js_input_action, shared_state, wait_condition=EC.presence_of_element_located):
                  raise Exception("Failed to input prompt text using JavaScript.")
             
             logger.info("Input verification successful. Test string was entered.")
@@ -440,7 +478,7 @@ def main():
                     raise Exception(f"Read-back value '{read_back_value}' did not match expected '{test_string}'.")
                 logger.info(f"SUCCESS: Read-back value '{read_back_value}' matches expected string.")
 
-            if not safe_find_and_act(driver, SELECTORS['chat']['input'], write_and_read_action, stop_event, wait_condition=EC.presence_of_element_located):
+            if not safe_find_and_act(driver, SELECTORS['chat']['input'], write_and_read_action, shared_state, wait_condition=EC.presence_of_element_located):
                 raise Exception("Write/Read/Compare action failed.")
 
             logger.info("Input & Read-back verification successful.")
@@ -456,7 +494,7 @@ def main():
     if not agent_version:
         logger.error("Missing required argument: --agent-version=<v1|v2>")
         logger.error("Example: python gui_evaluation_script.py --port=9222 --agent-version=v1")
-        stop_event.set() # Stop GUI thread
+        shared_state.stop_event.set() # Stop GUI thread
         return
 
     logger.info(f"Targeting agent: {agent_version} on port: {port}")
@@ -471,14 +509,14 @@ def main():
 
         results = []
         for index, row in prompts_df.iterrows():
-            if stop_event.is_set():
+            if shared_state.stop_event.is_set():
                 logger.info("Evaluation loop halted by user.")
                 break
 
             prompt_id = row['id']
             prompt_text = row['prompt']
             
-            response_text, response_time_ms, error = evaluate_prompt(driver, prompt_id, prompt_text, stop_event, debug_pause_flag, index + 1, total_prompts)
+            response_text, response_time_ms, error = evaluate_prompt(driver, prompt_id, prompt_text, shared_state, debug_pause_flag, index + 1, total_prompts)
 
             result = {
                 "prompt_id": prompt_id,
@@ -493,7 +531,7 @@ def main():
 
             # エラーが発生した場合は、次のプロンプトのために状態をリセットする
             if error:
-                if stop_event.is_set():
+                if shared_state.stop_event.is_set():
                     logger.info("Recovery halted by user.")
                     break
                 logger.warning(f"Error on prompt {prompt_id}. Attempting to recover by re-navigating to the base URL.")
@@ -528,7 +566,8 @@ def main():
     except Exception as e:
         logger.error(f"An unexpected error occurred during evaluation: {e}")
     finally:
-        stop_event.set() # Ensure GUI thread will exit
+        shared_state.status = "Finished."
+        shared_state.stop_event.set() # Ensure GUI thread will exit
         if driver:
             driver.quit()
         logger.info("Evaluation script finished.")
