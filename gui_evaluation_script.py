@@ -1,356 +1,329 @@
 import os
-import json
-import time
-import logging
 import sys
-import pandas as pd
+import time
+import json
+import logging
+import threading
 import subprocess
-from datetime import datetime, timezone
-from dotenv import load_dotenv
+from datetime import datetime
+import argparse
+
+# --- Tkinter Imports ---
+import tkinter as tk
+from tkinter import scrolledtext, ttk, messagebox
+
+# --- Selenium Imports ---
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, InvalidElementStateException, NoSuchElementException
-import tkinter as tk
-from tkinter import ttk
-import threading
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException, WebDriverException
 
-# --- Custom Exception for interruption ---
-class InterruptedException(Exception):
+# --- Constants ---
+AGENT_VERSION = "1.0.2"
+LOG_DIR = "evaluation_logs"
+DEFAULT_CHROME_PATH = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+DEFAULT_USER_DATA_DIR = r"C:\Chrome_dev_session"
+
+DEFAULT_SELECTORS = {
+    "chat": {
+        "launcher": "a.codicon-copilot-chat",
+        "iframe": "iframe.webview.ready",
+        "input": "div.native-edit-context[role='textbox']",
+        "submit": "a.codicon-send",
+        "responseContainer": "div.monaco-list-row[aria-label*='Copilot']",
+        "welcomeMessage": "div.welcome-view-content"
+    }
+}
+
+# --- Logger Setup ---
+def setup_logger(agent_version):
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_filename = os.path.join(LOG_DIR, f"evaluation_log_{agent_version}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_filename),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    return log_filename
+
+# --- Data Loading ---
+def load_selectors(file_path='selectors.json'):
+    try:
+        with open(file_path, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        logging.warning(f"Could not load or parse {file_path}: {e}. Using hardcoded default selectors.")
+        return DEFAULT_SELECTORS
+
+def load_prompts(file_path='prompts.csv'):
+    # This function is not used when a single prompt is provided via CLI
     pass
 
-# --- Shared State & GUI Control ---
-class SharedState:
-    """A simple class to share state between the main and GUI threads."""
-    def __init__(self):
-        self.status = "Initializing..."
-        self.progress = ""
-        self.stop_event = threading.Event()  # For GUI to signal main thread
-        self.gui_shutdown_event = threading.Event() # For main thread to command GUI shutdown
-
-def create_gui(shared_state, selenium_thread):
-    """
-    Creates and runs the Tkinter GUI in the main thread.
-    """
-    root = tk.Tk()
-    root.title("Script Control")
-    root.geometry("350x150")
-
-    def on_stop():
-        """Handles stop button click or window close."""
-        if not shared_state.stop_event.is_set():
-            logger.info("STOP signal received. Notifying Selenium thread.")
-            shared_state.stop_event.set()
-        # The GUI will be destroyed after the selenium thread is joined.
-
-    root.protocol("WM_DELETE_WINDOW", on_stop)
-
-    main_frame = ttk.Frame(root, padding="10")
-    main_frame.pack(fill=tk.BOTH, expand=True)
-
-    status_label = ttk.Label(main_frame, text="Initializing...", font=("Segoe UI", 10))
-    status_label.pack(pady=5, anchor='w')
-
-    progress_label = ttk.Label(main_frame, text="", font=("Segoe UI", 10))
-    progress_label.pack(pady=5, anchor='w')
-
-    stop_button = ttk.Button(main_frame, text="STOP SCRIPT", command=on_stop)
-    stop_button.pack(pady=20)
-
-    def update_labels():
-        """Periodically updates GUI labels from shared state."""
-        if not selenium_thread.is_alive():
-            # Worker thread is done, so we can close the GUI.
-            if root.winfo_exists():
-                root.destroy()
-            return
-
-        try:
-            if root.winfo_exists():
-                status_label.config(text=shared_state.status)
-                progress_label.config(text=shared_state.progress)
-                root.after(250, update_labels)
-        except tk.TclError:
-            pass # Window was destroyed.
-
-    # Start the polling loop and the main event loop.
-    update_labels()
-    root.mainloop()
-
-# --- 初期設定 ---
-load_dotenv()
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
-
-logger = logging.getLogger(__name__)
-
-# --- 定数定義 ---
-PROMPTS_FILE = 'prompts.csv'
-SELECTORS_FILE = 'selectors.json'
-LOG_FILE = 'gui_evaluation_logs.jsonl'
-GITHUB_BASE_URL = 'https://vscode.dev/tunnel/s10610n20/home/jinno/copilot-instruction-eval?vscode-lang=ja'
-
-with open(SELECTORS_FILE, 'r', encoding='utf-8') as f:
-    SELECTORS = json.load(f)
-
-# --- WebDriverのセットアップ ---
-def launch_chrome_for_debugging(port, chrome_path):
-    """指定されたポートでリモートデバッグを有効にしてChromeを起動する"""
-    command = f'"{chrome_path}" --remote-debugging-port={port} --user-data-dir="C:\\Chrome_dev_session"'
-    logger.info(f"Launching Chrome with command: {command}")
-    try:
-        subprocess.Popen(command, shell=True)
-        logger.info(f"Chrome launched. Waiting a few seconds for it to initialize...")
-        time.sleep(3)
-    except FileNotFoundError:
-        logger.error(f"Chrome executable not found at {chrome_path}. Please specify the correct path using --chrome-path.")
-        return False
-    except Exception as e:
-        logger.error(f"Failed to launch Chrome: {e}")
-        return False
-    return True
+# --- Selenium WebDriver Setup ---
+def launch_chrome_for_debugging(port, user_data_dir, chrome_path):
+    if not os.path.exists(chrome_path):
+        logging.error(f"Chrome executable not found at: {chrome_path}")
+        return None
+    command = f'"{chrome_path}" --remote-debugging-port={port} --user-data-dir="{user_data_dir}"'
+    logging.info(f"Launching Chrome with command: {command}")
+    process = subprocess.Popen(command, shell=True)
+    time.sleep(3) # Give Chrome a moment to start
+    return process
 
 def setup_driver(port):
-    """既存のChromeブラウザに接続するためのWebDriverをセットアップする"""
-    logger.info(f"Connecting to Chrome browser on port {port}...")
-    options = Options()
-    options.add_experimental_option("debuggerAddress", f"127.0.0.1:{port}")
+    chrome_options = Options()
+    chrome_options.add_experimental_option("debuggerAddress", f"127.0.0.1:{port}")
     try:
-        driver = webdriver.Chrome(options=options)
-        logger.info("Successfully connected to the existing Chrome browser.")
+        driver = webdriver.Chrome(options=chrome_options)
+        logging.info(f"Successfully connected to the existing Chrome browser.")
         return driver
-    except Exception as e:
-        logger.error(f"Failed to connect to browser on port {port}. Is Chrome running with --remote-debugging-port={port}?")
-        logger.error(f"Error details: {e}")
+    except WebDriverException as e:
+        logging.error(f"Failed to connect to Chrome. Is it running with remote debugging on port {port}? Error: {e}")
         return None
 
-# --- Copilot Agent操作 ---
-def safe_find_and_act(driver, selector, action_func, shared_state, retries=3, delay=1, wait_condition=EC.element_to_be_clickable):
-    for i in range(retries):
-        try:
-            if shared_state.stop_event.is_set(): raise InterruptedException("Stop signal received during action.")
-            element = WebDriverWait(driver, 5).until(wait_condition((By.CSS_SELECTOR, selector)))
-            action_func(element)
-            return True
-        except (StaleElementReferenceException, InvalidElementStateException, TimeoutException, NoSuchElementException) as e:
-            if shared_state.stop_event.is_set(): raise InterruptedException("Stop signal received during action.")
-            logger.warning(f"Action on selector '{selector}' failed (attempt {i+1}/{retries}): {type(e).__name__}. Retrying...")
-            time.sleep(delay)
-    logger.error(f"Action on selector '{selector}' failed after {retries} retries.")
-    return False
+# --- Core Automation Logic ---
+def wait_for_app_to_load(driver, max_wait_seconds=30):
+    logging.info("Checking application readiness...")
+    try:
+        # A reliable indicator that the main VSCode UI has loaded.
+        launcher_selector = DEFAULT_SELECTORS['chat']['launcher']
+        WebDriverWait(driver, max_wait_seconds).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, launcher_selector))
+        )
+        logging.info("Application is ready.")
+        return True
+    except TimeoutException:
+        logging.error("Timeout: The main application UI did not appear to load in time.")
+        return False
 
 def wait_for_response_with_progress(driver, timeout, selector, initial_count, shared_state):
     start_time = time.time()
     while time.time() - start_time < timeout:
-        if shared_state.stop_event.is_set():
-            raise InterruptedException("Stop signal received during wait.")
-        elapsed = int(time.time() - start_time)
-        shared_state.status = f"Waiting for response... {elapsed}s / {timeout}s"
-        current_count = len(driver.find_elements(By.CSS_SELECTOR, selector))
-        if current_count > initial_count:
-            logger.info(f"New element found. Total count: {current_count}")
-            return True
-        time.sleep(0.5)
+        elapsed = time.time() - start_time
+        shared_state.progress = f"{int(elapsed)}s / {timeout}s"
+        try:
+            current_count = len(driver.find_elements(By.CSS_SELECTOR, selector))
+            if current_count > initial_count:
+                return True
+        except StaleElementReferenceException:
+            # The DOM is changing, which is expected. Just continue polling.
+            pass
+        time.sleep(1)
     return False
 
-def evaluate_prompt(driver, prompt_id, prompt_text, shared_state, debug_pause=False, prompt_index=0, total_prompts=0):
-    shared_state.progress = f"Prompt ({prompt_index}/{total_prompts})"
-    logger.info(f"--- Starting evaluation for prompt ID: {prompt_id} {shared_state.progress} ---")
+def evaluate_prompt(driver, prompt_id, prompt_text, shared_state, selectors, root):
+    shared_state.status = f"Prompt {prompt_id}: Starting..."
     start_time = time.time()
+
+    input_selector = selectors.get('chat', {}).get('input', DEFAULT_SELECTORS['chat']['input'])
+    response_container_selector = selectors.get('chat', {}).get('responseContainer', DEFAULT_SELECTORS['chat']['responseContainer'])
+    initial_response_count = len(driver.find_elements(By.CSS_SELECTOR, response_container_selector))
+
+    # HYPOTHESIS: The entire chat widget is in an iframe. Let's switch to it.
     try:
-        shared_state.status = "Step 1/3: Checking chat panel..."
-        try:
-            driver.find_element(By.CSS_SELECTOR, SELECTORS['chat']['input'])
-            logger.info("...Chat panel is already open.")
-        except NoSuchElementException:
-            logger.info("...Chat panel is closed. Attempting to open.")
-            if not safe_find_and_act(driver, SELECTORS['chat']['launcher'], lambda el: el.click(), shared_state):
-                raise Exception("Failed to click chat launcher to open panel.")
-            logger.info("...Chat panel opened successfully.")
-
-        shared_state.status = "Step 2/3: Inputting prompt..."
-        initial_response_count = len(driver.find_elements(By.CSS_SELECTOR, SELECTORS['chat']['responseContainer']))
-
-        def js_input_and_submit_action(element):
-            driver.execute_script("arguments[0].value = arguments[1];", element, prompt_text)
-            driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", element)
-            time.sleep(0.5)
-            element.send_keys(Keys.ENTER)
-
-        if not safe_find_and_act(driver, SELECTORS['chat']['input'], js_input_and_submit_action, shared_state, wait_condition=EC.presence_of_element_located):
-            raise Exception("Failed to input prompt and submit with Enter key.")
-        logger.info("...Prompt text input and submitted successfully.")
-
-        if debug_pause:
-            shared_state.status = "Debug pause: inspect browser."
-            input("\n>>> DEBUG MODE: Prompt submitted. Please inspect the browser now. Press Enter to continue...\n")
-
-        shared_state.status = f"Step 3/3: Waiting for response... (max 60s)"
-        if not wait_for_response_with_progress(driver, 60, SELECTORS['chat']['responseContainer'], initial_response_count, shared_state):
-            raise TimeoutException(f"Timeout while waiting for response to prompt ID: {prompt_id}")
-        
-        logger.info("...New response container detected.")
-        end_time = time.time()
-        response_time_ms = (end_time - start_time) * 1000
-        response_elements = driver.find_elements(By.CSS_SELECTOR, SELECTORS['chat']['responseContainer'])
-        latest_response_element = response_elements[-1]
-        response_text = latest_response_element.text
-
-        logger.info(f"Successfully evaluated prompt ID: {prompt_id}")
-        return response_text, response_time_ms, None
-
-    except InterruptedException as e:
-        logger.error(f"An error occurred for prompt ID {prompt_id}: {e}")
-        driver.save_screenshot(f'error_prompt_{prompt_id}_interrupted.png')
-        raise e # Re-raise to stop the main loop
-    except TimeoutException:
-        error_message = f"Timeout while waiting for response to prompt ID: {prompt_id}"
-        logger.error(error_message)
-        driver.save_screenshot(f'error_prompt_{prompt_id}_timeout.png')
-        return None, None, error_message
-    except Exception as e:
-        logger.error(f"An error occurred for prompt ID {prompt_id}: {e}")
-        shared_state.status = f"Error on prompt {prompt_id}"
-        driver.save_screenshot(f'error_prompt_{prompt_id}_exception.png')
-        return None, 0, str(e)
-
-# --- ログ書き込み ---
-def log_result(result):
-    with open(LOG_FILE, 'a', encoding='utf-8') as f:
-        f.write(json.dumps(result, ensure_ascii=False) + '\n')
-
-# --- アプリケーション状態確認 ---
-def wait_for_app_to_load(driver, max_wait_seconds=30):
-    logger.info("Checking application readiness...")
-    if GITHUB_BASE_URL not in driver.current_url:
-        logger.info(f"Navigating to the target URL: {GITHUB_BASE_URL}")
-        driver.get(GITHUB_BASE_URL)
-    else:
-        logger.info("Already on the target URL. Verifying readiness...")
-    try:
-        WebDriverWait(driver, max_wait_seconds).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, SELECTORS['chat']['launcher']))
+        iframe_selector = selectors.get('chat', {}).get('iframe', DEFAULT_SELECTORS['chat']['iframe'])
+        WebDriverWait(driver, 10).until(
+            EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, iframe_selector))
         )
-        logger.info("Application is ready.")
-        return True
+        logging.info("Successfully switched to chat iframe.")
     except TimeoutException:
-        logger.error("Application failed to load within the time limit.")
-        driver.save_screenshot('error_app_load_timeout.png')
-        return False
+        logging.warning("Could not find or switch to an iframe. Assuming content is in the main document.")
+        driver.switch_to.default_content()
 
-# --- メイン処理 ---
-def run_selenium_task(shared_state, args):
-    """Runs the entire Selenium process in a background thread."""
+    # --- ULTIMATE SIMPLIFICATION ---
+    # 1. Assume panel is closed. Click the launcher icon to open it.
+    logging.info("Executing simplified sequence: Clicking launcher icon.")
+    launcher_selector = selectors.get('chat', {}).get('launcher', DEFAULT_SELECTORS['chat']['launcher'])
+    launcher_icon = WebDriverWait(driver, 10).until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, launcher_selector))
+    )
+    driver.execute_script("arguments[0].click();", launcher_icon)
+
+    # 2. Wait for the input element to appear.
+    logging.info("Waiting for chat input to appear after opening panel.")
+    input_element = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, input_selector))
+    )
+
+    # 3. Perform clipboard paste and send keys to the fresh element reference
+    root.clipboard_clear()
+    root.clipboard_append(prompt_text)
+    root.update()
+    
+    input_element.send_keys(Keys.CONTROL, 'v')
+    time.sleep(0.5) # Allow a moment for UI to update, e.g., send button to become enabled
+
+    # 4. Find and click the correct send button
+    logging.info("Finding and clicking the send button...")
+    submit_selector = selectors.get('chat', {}).get('submit', DEFAULT_SELECTORS['chat']['submit'])
+    submit_button = WebDriverWait(driver, 10).until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, submit_selector))
+    )
+    driver.execute_script("arguments[0].click();", submit_button)
+
+    shared_state.status = f"Prompt {prompt_id}: Waiting for response..."
+    if not wait_for_response_with_progress(driver, 90, response_container_selector, initial_response_count, shared_state):
+        raise TimeoutException("Timeout waiting for new response.")
+    
+    end_time = time.time()
+    response_time = end_time - start_time
+    
+    response_elements = driver.find_elements(By.CSS_SELECTOR, response_container_selector)
+    response_text = response_elements[-1].text if response_elements else ""
+    
+    logging.info(f"Successfully processed prompt ID {prompt_id} in {response_time:.2f}s.")
+    return response_text, response_time
+
+# --- GUI ---
+class SharedState:
+    def __init__(self):
+        self.status = "Initializing..."
+        self.progress = ""
+        self.stop_event = threading.Event()
+        self.task_done = threading.Event()
+
+def create_gui(shared_state):
+    root = tk.Tk()
+    root.title(f"Copilot Evaluation Agent v{AGENT_VERSION}")
+    root.geometry("500x400")
+
+    main_frame = ttk.Frame(root, padding="10")
+    main_frame.pack(fill=tk.BOTH, expand=True)
+
+    status_label = ttk.Label(main_frame, text="Status:", font=("Segoe UI", 10, "bold"))
+    status_label.pack(anchor='w')
+
+    status_var = tk.StringVar(value=shared_state.status)
+    status_display = ttk.Label(main_frame, textvariable=status_var, wraplength=480)
+    status_display.pack(anchor='w', fill=tk.X, pady=5)
+
+    progress_label = ttk.Label(main_frame, text="Progress:", font=("Segoe UI", 10, "bold"))
+    progress_label.pack(anchor='w', pady=(10, 0))
+
+    progress_var = tk.StringVar(value=shared_state.progress)
+    progress_display = ttk.Label(main_frame, textvariable=progress_var)
+    progress_display.pack(anchor='w', fill=tk.X, pady=5)
+
+    log_label = ttk.Label(main_frame, text="Log:", font=("Segoe UI", 10, "bold"))
+    log_label.pack(anchor='w', pady=(10, 0))
+    
+    log_text = scrolledtext.ScrolledText(main_frame, height=10, wrap=tk.WORD, state='disabled')
+    log_text.pack(fill=tk.BOTH, expand=True, pady=5)
+
+    def stop_script():
+        if messagebox.askyesno("Confirm Exit", "Are you sure you want to stop the evaluation?"):
+            shared_state.stop_event.set()
+            shared_state.status = "Stopping..."
+
+    stop_button = ttk.Button(main_frame, text="Stop Evaluation", command=stop_script)
+    stop_button.pack(pady=10)
+
+    def update_ui():
+        status_var.set(shared_state.status)
+        progress_var.set(shared_state.progress)
+        if shared_state.task_done.is_set() and not shared_state.stop_event.is_set():
+            root.after(2000, root.destroy)
+        elif shared_state.stop_event.is_set():
+             root.destroy()
+        else:
+            root.after(100, update_ui)
+
+    root.protocol("WM_DELETE_WINDOW", stop_script)
+    return root, update_ui
+
+# --- Main Task Thread ---
+def selenium_task(shared_state, cli_args, root):
     driver = None
+    chrome_process = None
     try:
-        if not args.no_launch:
-            if not launch_chrome_for_debugging(args.port, args.chrome_path): return
-        
-        driver = setup_driver(args.port)
-        if not driver: return
+        log_filename = setup_logger(AGENT_VERSION)
+        shared_state.status = f"Log file: {log_filename}"
+        selectors = load_selectors()
 
-        if not wait_for_app_to_load(driver): return
-
-        logger.info(f"Targeting agent: {args.agent_version} on port: {args.port}")
-        
-        try:
-            prompts_df = pd.read_csv(PROMPTS_FILE)
-        except FileNotFoundError:
-            logger.error(f"Prompts file not found at {PROMPTS_FILE}")
+        if not cli_args.prompt:
+            logging.error("No prompt provided. Please use the --prompt argument.")
+            shared_state.status = "Error: No prompt provided."
             return
 
-        if args.max_prompts:
-            prompts_df = prompts_df.head(args.max_prompts)
+        driver = setup_driver(cli_args.port)
+        if not driver:
+            shared_state.status = f"Launching new Chrome session on port {cli_args.port}..."
+            chrome_process = launch_chrome_for_debugging(cli_args.port, cli_args.user_data_dir, cli_args.chrome_path)
+            driver = setup_driver(cli_args.port)
+            if not driver:
+                raise Exception("Failed to start or connect to Chrome.")
 
-        logger.info(f"--- Starting evaluation for {args.agent_version} with {len(prompts_df)} prompts ---")
+        shared_state.status = "Navigating to target URL..."
+        driver.get(cli_args.url)
         
-        results = []
-        for index, row in prompts_df.iterrows():
-            if shared_state.stop_event.is_set():
-                logger.info("Stop signal received. Halting evaluation loop.")
-                break
+        logging.info("Initiating a 10-second hard sleep immediately after navigation to allow the app to fully stabilize...")
+        time.sleep(10)
 
-            prompt_id = row['id']
-            prompt_text = row['prompt']
-            
-            response_text, response_time, error = evaluate_prompt(
-                driver, prompt_id, prompt_text, shared_state, 
-                debug_pause=args.debug_pause, prompt_index=index + 1, total_prompts=len(prompts_df)
-            )
+        if not wait_for_app_to_load(driver):
+            raise Exception("Application did not load correctly.")
 
-            result = {
-                'prompt_id': prompt_id, 'prompt_text': prompt_text, 'response_text': response_text,
-                'response_time_ms': response_time, 'error': error, 'agent_version': args.agent_version,
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }
-            results.append(result)
-            log_result(result)
+        evaluate_prompt(driver, "cli_prompt", cli_args.prompt, shared_state, selectors, root)
 
-            if error:
-                if shared_state.stop_event.is_set():
-                    logger.info("Recovery halted by user.")
-                    break
-                logger.warning(f"Error on prompt {prompt_id}. Attempting to recover.")
-                if not wait_for_app_to_load(driver):
-                    logger.error("Failed to recover page after error. Exiting.")
-                    driver.save_screenshot('error_recovery_failed.png')
-                    break
-                logger.info("Recovery successful. Continuing with next evaluation.")
+        shared_state.status = "Evaluation finished successfully!"
+        logging.info("Script finished successfully.")
 
-        logger.info(f"--- Finished evaluation for {args.agent_version} ---")
-        
-        if results:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f'evaluation_results_{args.agent_version}_{timestamp}.csv'
-            pd.DataFrame(results).to_csv(filename, index=False)
-            logger.info(f"Results saved to {filename}")
-
-    except InterruptedException as e:
-        logger.info(f"Script interrupted by user: {e}")
     except Exception as e:
-        logger.error(f"An unhandled exception occurred in the Selenium thread: {e}", exc_info=True)
+        logging.error(f"A critical error occurred in the main task: {e}")
+        shared_state.status = f"Critical Error: {e}"
+        if driver:
+            try:
+                os.makedirs(LOG_DIR, exist_ok=True)
+                screenshot_path = os.path.join(LOG_DIR, f"critical_error_screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+                driver.save_screenshot(screenshot_path)
+                logging.info(f"Saved error screenshot to {screenshot_path}")
+            except Exception as se:
+                logging.error(f"Failed to save screenshot: {se}")
+
     finally:
-        logger.info("Selenium thread cleanup initiated.")
+        shared_state.task_done.set()
         if driver:
             try:
                 driver.quit()
             except Exception as e:
-                logger.error(f"Error quitting WebDriver: {e}")
-        logger.info("Selenium thread finished.")
+                logging.warning(f"Error quitting driver: {e}")
+        if chrome_process:
+            try:
+                chrome_process.terminate()
+            except Exception as e:
+                logging.warning(f"Error terminating Chrome process: {e}")
+        logging.info("Cleaned up WebDriver and Chrome process.")
+
+# --- Entry Point ---
+def parse_args():
+    parser = argparse.ArgumentParser(description="Copilot Evaluation Agent")
+    parser.add_argument('--prompt', type=str, required=True, help='The single prompt to evaluate.')
+    parser.add_argument('--url', type=str, default="https://vscode.dev/tunnel/s10610n20/home/jinno/copilot-instruction-eval?vscode-lang=ja", help='The URL to open.')
+    parser.add_argument('--port', type=int, default=9222, help='The remote debugging port for Chrome.')
+    parser.add_argument('--chrome-path', type=str, default=DEFAULT_CHROME_PATH, help='Path to the Chrome executable.')
+    parser.add_argument('--user-data-dir', type=str, default=DEFAULT_USER_DATA_DIR, help='Path to the Chrome user data directory.')
+    return parser.parse_args()
 
 def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Run Selenium evaluation script with GUI.")
-    parser.add_argument('--port', type=int, default=9222, help='Port for Chrome remote debugging.')
-    parser.add_argument('--agent-version', type=str, required=True, choices=['v1', 'v2'], help='Agent version to test.')
-    parser.add_argument('--max-prompts', type=int, help='Maximum number of prompts to evaluate.')
-    parser.add_argument('--chrome-path', type=str, default='C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', help='Path to Chrome executable.')
-    parser.add_argument('--no-launch', action='store_true', help="Don't launch a new Chrome instance.")
-    parser.add_argument('--debug-pause', action='store_true', help='Pause script after submitting a prompt for debugging.')
-    args = parser.parse_args()
-
+    args = parse_args()
     shared_state = SharedState()
     
-    # The Selenium task runs in a background thread.
-    selenium_thread = threading.Thread(target=run_selenium_task, args=(shared_state, args))
-    selenium_thread.start()
+    root, update_ui_func = create_gui(shared_state)
 
-    # The GUI runs in the main thread.
-    create_gui(shared_state, selenium_thread)
+    worker_thread = threading.Thread(target=selenium_task, args=(shared_state, args, root), daemon=True)
+    worker_thread.start()
 
-    # mainloop has finished, which means the GUI was closed or the worker thread finished.
-    # We now wait for the worker thread to be completely done.
-    logger.info("GUI closed. Waiting for Selenium thread to terminate...")
-    selenium_thread.join()
+    update_ui_func()
+    root.mainloop()
 
-    logger.info("Script finished.")
+    worker_thread.join() # Ensure thread is finished before exiting
+    logging.info("Script finished.")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
