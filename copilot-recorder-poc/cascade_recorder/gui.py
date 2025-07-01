@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from .recorder import Recorder
-from .config import AGENT_VERSION, RECORDING_FILE
+from .config import AGENT_VERSION, RECORDED_ACTIONS_JSON_PATH
 
 _LOG = logging.getLogger(__name__)
 
@@ -73,7 +73,6 @@ class RecorderGUI:
         self.btn_feedback.config(state=tk.NORMAL)
         self.btn_send_enter.config(state=tk.NORMAL)
         self.status_var.set("Recording…")
-        threading.Thread(target=self._drain_queue, daemon=True).start()
 
     def _on_stop(self):
         self.recorder.stop()
@@ -83,7 +82,8 @@ class RecorderGUI:
         self.btn_send_enter.config(state=tk.DISABLED)
         if self.recorder.recorded:
             self.btn_play.config(state=tk.NORMAL)
-        self.status_var.set(f"Saved → {RECORDING_FILE}")
+        self.status_var.set(f"Saved → {RECORDED_ACTIONS_JSON_PATH}")
+        self._update_log_display() # Call to update the log display after stopping
 
     def _on_play(self):
         self.btn_play.config(state=tk.DISABLED)
@@ -99,9 +99,23 @@ class RecorderGUI:
 
     def _send_enter_key_thread(self):
         try:
-            from selenium.webdriver.common.action_chains import ActionChains
-            from selenium.webdriver.common.keys import Keys
-            ActionChains(self.recorder.driver).send_keys(Keys.ENTER).perform()
+            # Switch to the browser window to ensure it has focus
+            self.recorder.driver.switch_to.window(self.recorder.driver.window_handles[0])
+            # Switch to the browser window to ensure it has focus
+            self.recorder.driver.switch_to.window(self.recorder.driver.window_handles[0])
+            # Use the browser instance from the recorder to send the key
+            script = """
+            var event = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                keyCode: 13,
+                which: 13,
+                bubbles: true,
+                cancelable: true
+            });
+            document.activeElement.dispatchEvent(event);
+            """
+            self.recorder.driver.execute_script(script)
             _LOG.info("Enter key sent successfully via GUI.")
         except Exception as e:
             _LOG.error(f"Failed to send Enter key from GUI: {e}")
@@ -129,22 +143,22 @@ class RecorderGUI:
         finally:
             self.btn_play.config(state=tk.NORMAL); self.btn_start.config(state=tk.NORMAL)
 
-    def _drain_queue(self):
-        while self.recorder._is_recording:
-            self.root.after(100, self._flush_log)
-            if not self.recorder._is_recording:
-                break
-
-    def _flush_log(self):
-        while not self.recorder.action_queue.empty():
-            act = self.recorder.action_queue.get()
-            if act["action_type"] == "feedback":
-                msg = f"FEEDBACK: {act['comment']}\n"
+    def _update_log_display(self):
+        """Updates the log display with recorded actions."""
+        self.log_txt.config(state="normal")
+        self.log_txt.delete("1.0", tk.END)
+        for action in self.recorder.recorded:
+            if action.action_type == "feedback":
+                msg = f"FEEDBACK: {action.comment}\n"
+            elif action.action_type == "key_press":
+                msg = f"KEY_PRESS: {action.key_pressed}\n"
             else:
-                tag = act["target_element"].get("tag", "?")
-                eid = act["target_element"].get("id", "")
-                msg = f"{act['action_type'].upper()}: {tag}#{eid}\n"
-            self.log_txt.config(state="normal"); self.log_txt.insert(tk.END, msg); self.log_txt.see(tk.END); self.log_txt.config(state="disabled")
+                tag = action.target_element.get("tag", "?")
+                eid = action.target_element.get("id", "")
+                msg = f"{action.action_type.upper()}: {tag}#{eid}\n"
+            self.log_txt.insert(tk.END, msg)
+        self.log_txt.see(tk.END)
+        self.log_txt.config(state="disabled")
 
     def _on_close(self):
         """Custom close handler to ensure data is saved without blocking the UI."""

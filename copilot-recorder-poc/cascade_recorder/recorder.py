@@ -44,7 +44,6 @@ class Recorder:
         """Stop recording and flush actions to file."""
         if not self._is_recording:
             return
-        remove_listeners(self.driver)
 
         # Get recorded actions directly from the browser's window.recordedActions
         try:

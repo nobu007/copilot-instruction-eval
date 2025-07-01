@@ -7,7 +7,6 @@ import threading
 import time
 import logging
 from selenium import webdriver
-from selenium import webdriver
 
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -16,7 +15,7 @@ from .config import (
     DEFAULT_CHROME_PATH,
     DEFAULT_USER_DATA_DIR,
 )
-from .browser import connect_driver, launch_chrome_for_debugging
+from .browser import Browser # Import the Browser class
 from .recorder import Recorder
 from .gui import RecorderGUI
 from .config import setup_logging
@@ -33,28 +32,6 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def _ensure_driver(args) -> tuple[webdriver.Chrome, subprocess.Popen | None]:
-    # Attempt to connect to an existing instance first.
-    driver = connect_driver(args.port)
-    if driver:
-        return driver, None
-
-    # If connection fails, launch a new Chrome instance.
-    _LOG.info(f"Could not connect. Launching Chrome on port {args.port}...")
-    proc, chrome_log_file = launch_chrome_for_debugging(args.port, args.user_data_dir, args.chrome_path)
-    time.sleep(5)  # Wait for Chrome to start.
-
-    # Retry connecting to the new instance.
-    driver = connect_driver(args.port)
-    if not driver:
-        proc.terminate()
-        raise RuntimeError(f"Failed to setup WebDriver after launching a new Chrome instance. "
-                         f"Check Chrome process logs at: {chrome_log_file}")
-    
-    _LOG.info("Successfully connected to the new Chrome instance.")
-    return driver, proc
-
-
 def _shutdown_on_exception(root_window, exc_info):
     """Logs unhandled exceptions and triggers a graceful shutdown."""
     _LOG.critical("Unhandled exception detected. Initiating shutdown.", exc_info=exc_info)
@@ -64,15 +41,20 @@ def _shutdown_on_exception(root_window, exc_info):
 
 def main():
     args = _parse_args()
-    proc = None
-    driver = None
+    browser_instance = None # Renamed from 'driver' to avoid confusion with selenium driver object
     root = None
     exit_code = 0
     try:
         setup_logging()
 
-        driver, proc = _ensure_driver(args)
-        driver.get(args.url)
+        # Use the Browser class directly
+        browser_instance = Browser(
+            start_url=args.url,
+            port=args.port,
+            user_data_dir=args.user_data_dir
+        )
+        driver = browser_instance.driver # Get the selenium driver object from the Browser instance
+
         WebDriverWait(driver, 30).until(lambda d: d.execute_script('return document.readyState') == 'complete')
 
         recorder = Recorder(driver)
@@ -86,7 +68,7 @@ def main():
         # For exceptions in other threads
         threading.excepthook = lambda args: _shutdown_on_exception(root, (args.exc_type, args.exc_value, args.exc_traceback))
 
-        gui = RecorderGUI(root, recorder, auto_test=True)
+        gui = RecorderGUI(root, recorder, auto_test=False)
         root.mainloop()
 
     except Exception:
@@ -102,10 +84,8 @@ def main():
         except tk.TclError:
             # This can happen if the root window is already gone.
             _LOG.debug("Tkinter window already destroyed, skipping cleanup.")
-        if driver and driver.service.is_connectable():
-            driver.quit()
-        if proc:
-            proc.terminate()
+        if browser_instance: # Use browser_instance for cleanup
+            browser_instance.close()
         _LOG.info("Application terminated.")
         sys.exit(exit_code)
 
