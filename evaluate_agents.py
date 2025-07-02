@@ -73,6 +73,11 @@ class AgentEvaluator:
     
     def _validate_config(self) -> None:
         """Validate the configuration."""
+        # Check for demo mode
+        if self.config.get("demo_mode"):
+            logger.info("Running in demo mode - using simulated responses")
+            return
+            
         required_vars = [
             "agent_v1_endpoint", "agent_v2_endpoint",
             "api_key_v1", "api_key_v2"
@@ -82,7 +87,8 @@ class AgentEvaluator:
         if missing_vars:
             raise ValueError(
                 f"Missing required configuration variables: {', '.join(missing_vars)}\n"
-                "Please set these in your .env file or environment variables."
+                "Please set these in your .env file or environment variables.\n"
+                "Alternatively, use --demo-mode to run with simulated data."
             )
 
     def _load_instructions(self) -> List[Dict[str, Any]]:
@@ -116,8 +122,49 @@ class AgentEvaluator:
             sanitized_config["api_key_v2"] = "***REDACTED***"
         return sanitized_config
 
+    def _simulate_agent_response(self, agent_version: str, instruction_text: str) -> str:
+        """Simulate agent response for demo mode."""
+        import random
+        
+        # Simulate processing time
+        time.sleep(random.uniform(0.5, 2.0))
+        
+        # Template responses based on instruction type
+        templates = {
+            "code_review": f"Agent {agent_version}: Security analysis indicates potential vulnerabilities in the authentication code. The implementation lacks proper password hashing and salt usage.",
+            "pr_creation": f"Agent {agent_version}: I'll create a pull request for input validation with email format checks, strong password policies (12+ chars, special chars, numbers), and server-side validation.",
+            "bug_fix": f"Agent {agent_version}: This issue appears to be related to race conditions. I recommend implementing proper synchronization mechanisms.",
+            "optimization": f"Agent {agent_version}: Performance can be improved by implementing caching mechanisms and optimizing database queries.",
+            "refactoring": f"Agent {agent_version}: The code structure can be improved by applying SOLID principles and reducing cyclomatic complexity."
+        }
+        
+        # Determine instruction type from text
+        instruction_lower = instruction_text.lower()
+        if "security" in instruction_lower or "authentication" in instruction_lower:
+            response_type = "code_review"
+        elif "pull request" in instruction_lower or "validation" in instruction_lower:
+            response_type = "pr_creation"
+        elif "bug" in instruction_lower or "error" in instruction_lower:
+            response_type = "bug_fix"
+        elif "performance" in instruction_lower or "optimize" in instruction_lower:
+            response_type = "optimization"
+        else:
+            response_type = "refactoring"
+        
+        base_response = templates.get(response_type, f"Agent {agent_version}: [Simulated response] Analysis and recommendations provided based on the given instruction.")
+        
+        # Add some variation between agents
+        if agent_version == "v2":
+            base_response += " Additionally, I suggest implementing comprehensive testing and documentation."
+        
+        return base_response
+
     def _call_agent_with_retry(self, agent_version: str, instruction_text: str) -> Tuple[Optional[str], Optional[str]]:
         """Make API call with retry mechanism and return (response_text, error_message)."""
+        # Demo mode: return simulated responses
+        if self.config.get("demo_mode"):
+            return self._simulate_agent_response(agent_version, instruction_text), None
+            
         api_key = self.config[f"api_key_{agent_version}"]
         headers = {}
         params = {}
@@ -178,6 +225,17 @@ class AgentEvaluator:
                 else:  # agent_version == 'v1'
                     return response.json()["candidates"][0]["content"]["parts"][0]["text"], None
 
+            except requests.exceptions.HTTPError as e:
+                last_error = e
+                status_code = e.response.status_code
+                error_detail = e.response.text
+                logger.error(f"HTTP Error {status_code} for {agent_version}: {error_detail}")
+                wait_time = self.config["retry_delay"] * (2 ** attempt)
+                logger.warning(
+                    f"Attempt {attempt + 1} failed for {agent_version}. "
+                    f"Retrying in {wait_time} seconds... Error: {e}"
+                )
+                time.sleep(wait_time)
             except requests.exceptions.RequestException as e:
                 last_error = e
                 wait_time = self.config["retry_delay"] * (2 ** attempt)
@@ -595,6 +653,26 @@ class AgentEvaluator:
 
 def main():
     """Main function to run the evaluation and generate reports."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="GitHub Copilot Agent Evaluation Script")
+    parser.add_argument(
+        "--instructions",
+        type=str,
+        default=CONFIG["instructions_file"],
+        help=f"Path to the instructions JSON file (default: {CONFIG['instructions_file']})",
+    )
+    parser.add_argument(
+        "--demo-mode",
+        action="store_true",
+        help="Run in demo mode with simulated responses (no API calls)"
+    )
+    args = parser.parse_args()
+
+    # Update CONFIG with parsed arguments
+    CONFIG["instructions_file"] = args.instructions
+    CONFIG["demo_mode"] = args.demo_mode
+
     print("GitHub Copilot Agent Evaluation")
     print("=" * 50)
     
