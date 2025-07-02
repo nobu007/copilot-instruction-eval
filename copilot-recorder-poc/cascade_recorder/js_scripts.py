@@ -9,6 +9,27 @@ if (window.CASCADE_LISTENERS_ACTIVE) {
     window.recordedActions = []; // Initialize the global array
     console.log('Activating Cascade listeners.');
 
+    // Override pushState and replaceState to capture history changes
+    const originalPushState = history.pushState;
+    history.pushState = function() {
+        originalPushState.apply(this, arguments);
+        window.recordedActions.push({
+            action_type: 'navigate',
+            url: window.location.href,
+            timestamp: new Date().toISOString()
+        });
+    };
+
+    const originalReplaceState = history.replaceState;
+    history.replaceState = function() {
+        originalReplaceState.apply(this, arguments);
+        window.recordedActions.push({
+            action_type: 'navigate',
+            url: window.location.href,
+            timestamp: new Date().toISOString()
+        });
+    };
+
     window.getElementInfo = (el) => {
         if (!el) return null;
         return {
@@ -31,12 +52,13 @@ if (window.CASCADE_LISTENERS_ACTIVE) {
         window.recordedActions.push(action);
     };
 
-    window.cascadeInputListener = (e) => {
+    // New function to directly record input
+    window.recordInput = (elementInfo, inputText) => {
         if (!window.CASCADE_LISTENERS_ACTIVE) return;
         const action = {
             action_type: 'input',
-            target_element: window.getElementInfo(e.target),
-            input_text: e.target.value,
+            target_element: elementInfo,
+            input_text: inputText,
             timestamp: new Date().toISOString()
         };
         window.recordedActions.push(action);
@@ -60,7 +82,7 @@ if (window.CASCADE_LISTENERS_ACTIVE) {
     const injectListenersIntoDoc = (doc) => {
         if (!doc || doc.cascadeListenersAttached) return;
         doc.addEventListener('click', window.cascadeClickListener, { capture: true });
-        doc.addEventListener('input', window.cascadeInputListener, { capture: true });
+        // doc.addEventListener('input', window.cascadeInputListener, { capture: true }); // Removed
         doc.addEventListener('keydown', window.cascadeKeyListener, { capture: true });
         doc.cascadeListenersAttached = true;
     };
