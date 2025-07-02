@@ -181,10 +181,11 @@ def poll_browser_logs_for_actions(driver, action_queue, stop_event):
                 if log_prefix in entry['message']:
                     try:
                         message_json = entry['message'].split(log_prefix, 1)[1]
-                        action = json.loads(json.loads(message_json))
+                        action = json.loads(message_json)
                         action_queue.put(action)
                     except (json.JSONDecodeError, IndexError) as e:
-                        logging.warning(f"Could not parse action log: {entry['message']}. Error: {e}")
+                        logging.error(f"Failed to decode JSON from browser log: {e}")
+                        logging.error(f"Problematic string: {entry['message']}")
         except WebDriverException as e:
             logging.error(f"Error polling browser logs: {e}")
             action_queue.put({"action_type": "error", "message": "Lost connection to browser."})
