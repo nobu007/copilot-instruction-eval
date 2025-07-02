@@ -26,6 +26,8 @@ class Recorder:
     def start(self):
         if self._is_recording:
             return
+        # Record the initial navigation
+        self.recorded.append(Action.now(action_type="navigate", url=self.driver.current_url))
         inject_listeners(self.driver)
         self._is_recording = True
         _LOG.info("Recording started…")
