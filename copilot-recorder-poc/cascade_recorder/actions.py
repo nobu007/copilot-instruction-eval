@@ -15,6 +15,7 @@ class Action:
     input_text: str | None = None
     comment: str | None = None
     key_pressed: str | None = None
+    url: str | None = None
 
     @staticmethod
     def now(action_type: str, **kwargs) -> "Action":
