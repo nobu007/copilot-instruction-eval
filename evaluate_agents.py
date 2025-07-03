@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from rouge import Rouge
 import seaborn as sns
+import sqlite3
 
 # Load environment variables from .env before anything else
 load_dotenv()
@@ -63,6 +64,7 @@ class AgentEvaluator:
         self.results = []
         self._setup_directories()
         self.rouge = Rouge()  # ROUGEスコア計算用
+        self.db_conn = self._setup_database()
         
         # Download required NLTK data
         try:
@@ -305,6 +307,14 @@ class AgentEvaluator:
         """Run evaluation on all instructions for both agents."""
         logger.info(f"Starting evaluation of {len(self.instructions)} instructions...")
         
+        # Create a new evaluation run
+        cursor = self.db_conn.cursor()
+        timestamp = datetime.now()
+        config_str = json.dumps(self._get_sanitized_config())
+        cursor.execute("INSERT INTO evaluation_runs (timestamp, config) VALUES (?, ?)", (timestamp, config_str))
+        run_id = cursor.lastrowid
+        self.db_conn.commit()
+        
         for instruction in tqdm(self.instructions, desc="Evaluating instructions"):
             instruction_id = instruction["id"]
             logger.info(f"\nEvaluating instruction: {instruction['title']} ({instruction['type']})")
@@ -329,7 +339,7 @@ class AgentEvaluator:
             })
             
             # Save intermediate results
-            self._save_results()
+            self._save_results(run_id)
     
     def _evaluate_instruction(self, instruction: Dict[str, Any], agent_version: str) -> Dict[str, Any]:
         """Evaluate a single instruction with the specified agent version."""
@@ -366,12 +376,13 @@ class AgentEvaluator:
         
         return result
     
-    def _save_results(self) -> None:
-        """Save current results to JSON and CSV files."""
+    def _save_results(self, run_id: int) -> None:
+        """Save current results to JSON, CSV, and SQLite."""
         # Save full results as JSON
         results_file = os.path.join(self.config["results_dir"], "evaluation_results.json")
         with open(results_file, "w", encoding="utf-8") as f:
             json.dump({
+                "run_id": run_id,
                 "timestamp": datetime.now().isoformat(),
                 "config": self._get_sanitized_config(),
                 "results": self.results
@@ -380,7 +391,10 @@ class AgentEvaluator:
         # Also save a flattened version as CSV for easier analysis
         self._save_results_csv()
         
-        logger.info(f"Results saved to {results_file}")
+        # Save to database
+        self._save_results_to_db(run_id)
+        
+        logger.info(f"Results saved to {results_file}, CSV, and database.")
     
     def _save_results_csv(self) -> None:
         """Save flattened results to CSV for easier analysis."""
@@ -415,6 +429,91 @@ class AgentEvaluator:
         logger.info(f"CSV results saved to {csv_file}")
         
         return df
+
+    def _setup_database(self) -> sqlite3.Connection:
+        """Setup the SQLite database and create tables."""
+        db_path = os.path.join(self.config["results_dir"], "evaluation.db")
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Create evaluation_runs table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS evaluation_runs (
+            run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME NOT NULL,
+            config TEXT NOT NULL
+        )
+        """)
+        
+        # Create results table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS results (
+            result_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id INTEGER,
+            instruction_id TEXT NOT NULL,
+            instruction_type TEXT,
+            difficulty TEXT,
+            agent_version TEXT NOT NULL,
+            success BOOLEAN,
+            response_time REAL,
+            jaccard_similarity REAL,
+            bleu_score REAL,
+            rouge_1 REAL,
+            rouge_2 REAL,
+            rouge_l REAL,
+            FOREIGN KEY (run_id) REFERENCES evaluation_runs (run_id)
+        )
+        """)
+        
+        conn.commit()
+        logger.info(f"Database setup complete at {db_path}")
+        return conn
+
+    def _save_results_to_db(self, run_id: int) -> None:
+        """Save evaluation results to the SQLite database."""
+        cursor = self.db_conn.cursor()
+        
+        for result in self.results:
+            for version in ["v1", "v2"]:
+                metrics = result.get(f"{version}_metrics", {})
+                cursor.execute("""
+                INSERT INTO results (
+                    run_id, instruction_id, instruction_type, difficulty, 
+                    agent_version, success, response_time, jaccard_similarity, 
+                    bleu_score, rouge_1, rouge_2, rouge_l
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    run_id,
+                    result["instruction_id"],
+                    result["instruction_type"],
+                    result["difficulty"],
+                    version,
+                    result[f"{version}_success"],
+                    metrics.get("response_time"),
+                    metrics.get("jaccard_similarity"),
+                    metrics.get("bleu_score"),
+                    metrics.get("rouge_1"),
+                    metrics.get("rouge_2"),
+                    metrics.get("rouge_l"),
+                ))
+        
+        self.db_conn.commit()
+        logger.info("Results saved to database.")
+
+    def _fetch_historical_data(self) -> pd.DataFrame:
+        """Fetch historical evaluation data from the database."""
+        try:
+            query = """
+            SELECT r.run_id, r.timestamp, res.* 
+            FROM evaluation_runs r JOIN results res ON r.run_id = res.run_id
+            """
+            df = pd.read_sql_query(query, self.db_conn)
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            logger.info(f"Fetched {len(df)} historical records from the database.")
+            return df
+        except Exception as e:
+            logger.error(f"Error fetching historical data: {e}")
+            return pd.DataFrame()
     
     def generate_report(self) -> None:
         """Generate a comprehensive markdown report with visualizations."""
@@ -423,9 +522,10 @@ class AgentEvaluator:
             return
             
         report_file = os.path.join(self.config["results_dir"], "evaluation_report.md")
+        historical_data = self._fetch_historical_data()
         
         # Generate visualizations
-        self._generate_visualizations()
+        self._generate_visualizations(historical_data)
         
         with open(report_file, "w", encoding="utf-8") as f:
             f.write("# GitHub Copilot Agent Evaluation Report\n\n")
@@ -468,6 +568,12 @@ class AgentEvaluator:
                     f.write(f"| {metric} | {v1_avg:.3f} | {v2_avg:.3f} | {diff_str} |\n")
             
             f.write("\n![Metrics Comparison](metrics_comparison.png)\n\n")
+
+            # Historical Trend Analysis
+            if not historical_data.empty:
+                f.write("## 📉 Historical Trend Analysis\n\n")
+                f.write("![Historical Success Rate](historical_success_rate.png)\n\n")
+                f.write("![Historical Response Time](historical_response_time.png)\n\n")
             
             # Detailed results
             f.write("## 📋 Detailed Results\n\n")
@@ -518,7 +624,7 @@ class AgentEvaluator:
         
         return total / count if count > 0 else 0.0
     
-    def _generate_visualizations(self) -> None:
+    def _generate_visualizations(self, historical_data: pd.DataFrame) -> None:
         """Generate visualization charts for the evaluation results."""
         try:
             import matplotlib.pyplot as plt
@@ -644,6 +750,32 @@ class AgentEvaluator:
 
                 plt.tight_layout()
                 plt.savefig(os.path.join(self.config["results_dir"], "response_time_comparison.png"))
+                plt.close()
+
+            # 4. Historical Trend Analysis
+            if not historical_data.empty:
+                # Success Rate Trend
+                hist_success = historical_data.groupby(['timestamp', 'agent_version'])['success'].mean().unstack()
+                hist_success.plot(figsize=(12, 6), marker='o')
+                plt.title('Historical Success Rate Trend')
+                plt.ylabel('Success Rate')
+                plt.xlabel('Date')
+                plt.legend(title='Agent Version')
+                plt.grid(True)
+                plt.tight_layout()
+                plt.savefig(os.path.join(self.config["results_dir"], "historical_success_rate.png"))
+                plt.close()
+
+                # Response Time Trend
+                hist_time = historical_data.groupby(['timestamp', 'agent_version'])['response_time'].mean().unstack()
+                hist_time.plot(figsize=(12, 6), marker='o')
+                plt.title('Historical Response Time Trend')
+                plt.ylabel('Average Response Time (s)')
+                plt.xlabel('Date')
+                plt.legend(title='Agent Version')
+                plt.grid(True)
+                plt.tight_layout()
+                plt.savefig(os.path.join(self.config["results_dir"], "historical_response_time.png"))
                 plt.close()
             
             logger.info("Visualizations generated successfully")
