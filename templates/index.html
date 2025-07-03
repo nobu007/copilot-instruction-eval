@@ -39,6 +39,13 @@
         }
 
         function getColorForAgent(agentVersion) {
+            const assignedColors = {
+                'v1': '#1f77b4', // Muted Blue
+                'v2': '#ff7f0e'  // Safety Orange
+            };
+            if (assignedColors[agentVersion]) {
+                return assignedColors[agentVersion];
+            }
             let hash = 0;
             for (let i = 0; i < agentVersion.length; i++) {
                 hash = agentVersion.charCodeAt(i) + ((hash << 5) - hash);
@@ -49,6 +56,27 @@
             const color = "00000".substring(0, 6 - c.length) + c;
             return `#${color}`;
         }
+
+        function calculateTrendline(data) {
+            const n = data.length;
+            if (n < 2) return [];
+            let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+            let count = 0;
+            for (let i = 0; i < n; i++) {
+                if (typeof data[i] === 'number' && !isNaN(data[i])) {
+                    sumX += i;
+                    sumY += data[i];
+                    sumXY += i * data[i];
+                    sumXX += i * i;
+                    count++;
+                }
+            }
+            if (count < 2) return [];
+            const slope = (count * sumXY - sumX * sumY) / (count * sumXX - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / count;
+            return data.map((_, i) => intercept + slope * i);
+        }
+
         // チェックボックスによるAgent表示切替機能を追加
         function createFilters() {
             const container = document.getElementById('agentFilters');
@@ -96,13 +124,13 @@
                 for (const version of agentVersions) {
                     const agentData = data.filter(item => item.timestamp === timestamp && item.agent_version === version);
                     
-                    let successRate = 0;
+                    let successRate = null;
                     if (agentData.length > 0) {
                         const successfulRuns = agentData.filter(item => item.success).length;
                         successRate = successfulRuns / agentData.length;
                     }
 
-                    let avgResponseTime = 0;
+                    let avgResponseTime = null;
                     if (agentData.length > 0) {
                         const totalResponseTime = agentData.reduce((acc, item) => acc + item.response_time, 0);
                         avgResponseTime = totalResponseTime / agentData.length;
@@ -113,26 +141,56 @@
                 }
             }
 
-            const successRateDatasets = agentVersions.map(version => {
-                return {
-                    label: `Agent ${version} Success Rate`,
-                    data: successRates[version],
-                    borderColor: getColorForAgent(version),
-                    borderWidth: 1,
-                    fill: false,
-                    agentVersion: version
-                };
+            const successRateDatasets = agentVersions.flatMap(version => {
+                const originalData = successRates[version];
+                const trendlineData = calculateTrendline(originalData);
+                return [
+                    {
+                        label: `Agent ${version} Success Rate`,
+                        data: originalData,
+                        borderColor: getColorForAgent(version),
+                        borderWidth: 1,
+                        fill: false,
+                        agentVersion: version,
+                        spanGaps: true
+                    },
+                    {
+                        label: `Agent ${version} Trend`,
+                        data: trendlineData,
+                        borderColor: getColorForAgent(version),
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false,
+                        agentVersion: version,
+                        pointRadius: 0
+                    }
+                ];
             });
 
-            const responseTimeDatasets = agentVersions.map(version => {
-                return {
-                    label: `Agent ${version} Response Time`,
-                    data: responseTimes[version],
-                    borderColor: getColorForAgent(version),
-                    borderWidth: 1,
-                    fill: false,
-                    agentVersion: version
-                };
+            const responseTimeDatasets = agentVersions.flatMap(version => {
+                const originalData = responseTimes[version];
+                const trendlineData = calculateTrendline(originalData);
+                return [
+                    {
+                        label: `Agent ${version} Response Time`,
+                        data: originalData,
+                        borderColor: getColorForAgent(version),
+                        borderWidth: 1,
+                        fill: false,
+                        agentVersion: version,
+                        spanGaps: true
+                    },
+                    {
+                        label: `Agent ${version} Trend`,
+                        data: trendlineData,
+                        borderColor: getColorForAgent(version),
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false,
+                        agentVersion: version,
+                        pointRadius: 0
+                    }
+                ];
             });
 
             successRateChart = new Chart(successRateCtx, {
@@ -142,6 +200,12 @@
                     datasets: successRateDatasets
                 },
                 options: {
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Success Rate Over Time'
+                        }
+                    },
                     scales: {
                         y: {
                             beginAtZero: true,
@@ -158,6 +222,12 @@
                     datasets: responseTimeDatasets
                 },
                 options: {
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Average Response Time Over Time'
+                        }
+                    },
                     scales: {
                         y: {
                             beginAtZero: true
