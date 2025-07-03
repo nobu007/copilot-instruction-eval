@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Analysis Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+        .chart-container {
+            width: 80%;
+            margin: auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- Agent フィルタ用チェックボックス -->
+    <div class="chart-container">
+        <strong>Agent フィルタ:</strong>
+        <div id="agentFilters"></div>
+    </div>
+    <div class="chart-container">
+        <canvas id="successRateChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <canvas id="responseTimeChart"></canvas>
+    </div>
+
+    <script>
+        const agentVersions = {{ agent_versions|tojson }};
+        let successRateChart, responseTimeChart;
+
+        async function fetchData() {
+            const response = await fetch('/api/data');
+            const data = await response.json();
+            return data;
+        }
+
+        function getColorForAgent(agentVersion) {
+            let hash = 0;
+            for (let i = 0; i < agentVersion.length; i++) {
+                hash = agentVersion.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const c = (hash & 0x00FFFFFF)
+                .toString(16)
+                .toUpperCase();
+            const color = "00000".substring(0, 6 - c.length) + c;
+            return `#${color}`;
+        }
+        // チェックボックスによるAgent表示切替機能を追加
+        function createFilters() {
+            const container = document.getElementById('agentFilters');
+            agentVersions.forEach(version => {
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = 'filter-' + version;
+                checkbox.checked = true;
+                const label = document.createElement('label');
+                label.htmlFor = checkbox.id;
+                label.innerText = 'Agent ' + version;
+                container.appendChild(checkbox);
+                container.appendChild(label);
+                container.appendChild(document.createTextNode(' '));
+                checkbox.addEventListener('change', () => filterAgent(version, checkbox.checked));
+            });
+        }
+
+        function filterAgent(version, show) {
+            [successRateChart, responseTimeChart].forEach(chart => {
+                chart.data.datasets.forEach(ds => {
+                    if (ds.agentVersion === version) {
+                        ds.hidden = !show;
+                    }
+                });
+                chart.update();
+            });
+        }
+
+        function createCharts(data) {
+            const successRateCtx = document.getElementById('successRateChart').getContext('2d');
+            const responseTimeCtx = document.getElementById('responseTimeChart').getContext('2d');
+
+            const timestamps = [...new Set(data.map(item => item.timestamp))].sort();
+
+            const successRates = {};
+            const responseTimes = {};
+
+            agentVersions.forEach(version => {
+                successRates[version] = [];
+                responseTimes[version] = [];
+            });
+
+            for (const timestamp of timestamps) {
+                for (const version of agentVersions) {
+                    const agentData = data.filter(item => item.timestamp === timestamp && item.agent_version === version);
+                    
+                    let successRate = 0;
+                    if (agentData.length > 0) {
+                        const successfulRuns = agentData.filter(item => item.success).length;
+                        successRate = successfulRuns / agentData.length;
+                    }
+
+                    let avgResponseTime = 0;
+                    if (agentData.length > 0) {
+                        const totalResponseTime = agentData.reduce((acc, item) => acc + item.response_time, 0);
+                        avgResponseTime = totalResponseTime / agentData.length;
+                    }
+
+                    successRates[version].push(successRate);
+                    responseTimes[version].push(avgResponseTime);
+                }
+            }
+
+            const successRateDatasets = agentVersions.map(version => {
+                return {
+                    label: `Agent ${version} Success Rate`,
+                    data: successRates[version],
+                    borderColor: getColorForAgent(version),
+                    borderWidth: 1,
+                    fill: false,
+                    agentVersion: version
+                };
+            });
+
+            const responseTimeDatasets = agentVersions.map(version => {
+                return {
+                    label: `Agent ${version} Response Time`,
+                    data: responseTimes[version],
+                    borderColor: getColorForAgent(version),
+                    borderWidth: 1,
+                    fill: false,
+                    agentVersion: version
+                };
+            });
+
+            successRateChart = new Chart(successRateCtx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: successRateDatasets
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 1
+                        }
+                    }
+                }
+            });
+
+            responseTimeChart = new Chart(responseTimeCtx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: responseTimeDatasets
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        fetchData().then(data => { createCharts(data); createFilters(); });
+    </script>
+</body>
+</html>
