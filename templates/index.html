@@ -27,16 +27,102 @@
     <div class="chart-container">
         <canvas id="responseTimeChart"></canvas>
     </div>
+    <div class="chart-container">
+        <strong>Metric:</strong>
+        <select id="metricSelector"></select>
+        <canvas id="metricChart"></canvas>
+    </div>
 
     <script>
         const agentVersions = {{ agent_versions|tojson }};
-        let successRateChart, responseTimeChart;
+        let successRateChart, responseTimeChart, metricChart;
+        let allData = [];
+        const metrics = [
+            'jaccard_similarity', 'bleu_score', 'rouge_1', 'rouge_2', 'rouge_l'
+        ];
 
         async function fetchData() {
             const response = await fetch('/api/data');
-            const data = await response.json();
-            return data;
+            allData = await response.json();
+            return allData;
         }
+
+        function populateMetricSelector() {
+            const selector = document.getElementById('metricSelector');
+            metrics.forEach(metric => {
+                const option = document.createElement('option');
+                option.value = metric;
+                option.innerText = metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                selector.appendChild(option);
+            });
+            selector.addEventListener('change', (event) => {
+                updateMetricChart(event.target.value);
+            });
+        }
+
+        function updateMetricChart(metric) {
+            if (metricChart) {
+                metricChart.destroy();
+            }
+            const metricCtx = document.getElementById('metricChart').getContext('2d');
+            const timestamps = [...new Set(allData.map(item => item.timestamp))].sort();
+
+            const metricDatasets = agentVersions.flatMap(version => {
+                const agentData = allData.filter(item => item.agent_version === version);
+                const dataPoints = timestamps.map(ts => {
+                    const dayData = agentData.filter(item => item.timestamp === ts && item[metric] != null);
+                    if (dayData.length === 0) return null;
+                    const avg = dayData.reduce((acc, item) => acc + item[metric], 0) / dayData.length;
+                    return avg;
+                });
+
+                const trendlineData = calculateTrendline(dataPoints);
+
+                return [
+                    {
+                        label: `Agent ${version} ${metric}`,
+                        data: dataPoints,
+                        borderColor: getColorForAgent(version),
+                        borderWidth: 1,
+                        fill: false,
+                        agentVersion: version,
+                        spanGaps: true
+                    },
+                    {
+                        label: `Agent ${version} Trend`,
+                        data: trendlineData,
+                        borderColor: getColorForAgent(version),
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false,
+                        agentVersion: version,
+                        pointRadius: 0
+                    }
+                ];
+            });
+
+            metricChart = new Chart(metricCtx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: metricDatasets
+                },
+                options: {
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} Over Time`
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
 
         function getColorForAgent(agentVersion) {
             const assignedColors = {
@@ -96,13 +182,15 @@
         }
 
         function filterAgent(version, show) {
-            [successRateChart, responseTimeChart].forEach(chart => {
-                chart.data.datasets.forEach(ds => {
-                    if (ds.agentVersion === version) {
-                        ds.hidden = !show;
-                    }
-                });
-                chart.update();
+            [successRateChart, responseTimeChart, metricChart].forEach(chart => {
+                if(chart) {
+                    chart.data.datasets.forEach(ds => {
+                        if (ds.agentVersion === version) {
+                            ds.hidden = !show;
+                        }
+                    });
+                    chart.update();
+                }
             });
         }
 
@@ -237,7 +325,12 @@
             });
         }
 
-        fetchData().then(data => { createCharts(data); createFilters(); });
+        fetchData().then(data => { 
+            createCharts(data); 
+            createFilters();
+            populateMetricSelector();
+            updateMetricChart(metrics[0]);
+        });
     </script>
 </body>
 </html>
