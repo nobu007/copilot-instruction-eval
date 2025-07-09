@@ -1,8 +1,9 @@
 {
-  "timestamp": "2025-06-25T19:51:11.720753",
+  "run_id": 5,
+  "timestamp": "2025-07-03T00:05:45.331840",
   "config": {
-    "agent_v1_endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-    "agent_v2_endpoint": "https://api.groq.com/openai/v1/chat/completions/meta-llama/llama-4-maverick-17b-128e-instruct",
+    "agent_v1_endpoint": null,
+    "agent_v2_endpoint": null,
     "agent_v2_model": null,
     "api_key_v1": "***REDACTED***",
     "api_key_v2": "***REDACTED***",
@@ -10,7 +11,8 @@
     "results_dir": "results",
     "timeout": 60,
     "max_retries": 3,
-    "retry_delay": 5
+    "retry_delay": 5,
+    "demo_mode": true
   },
   "results": [
     {
@@ -20,26 +22,26 @@
       "v1_success": true,
       "v2_success": true,
       "v1_metrics": {
-        "response_length": 5892,
+        "response_length": 156,
         "expected_length": 126,
-        "length_ratio": 46.76190476190476,
-        "jaccard_similarity": 0.03712871287128713,
-        "bleu_score": 0.004027397976620504,
-        "rouge_1": 0.0765765757162568,
-        "rouge_2": 0.013568520528896181,
-        "rouge_l": 0.0765765757162568,
-        "response_time": 8.637922286987305
+        "length_ratio": 1.2380952380952381,
+        "jaccard_similarity": 0.15151515151515152,
+        "bleu_score": 0.035247858975832255,
+        "rouge_1": 0.2999999950000001,
+        "rouge_2": 0.05263157394736889,
+        "rouge_l": 0.2999999950000001,
+        "response_time": 1.5923643112182617
       },
       "v2_metrics": {
-        "response_length": 2765,
+        "response_length": 234,
         "expected_length": 126,
-        "length_ratio": 21.944444444444443,
-        "jaccard_similarity": 0.04739336492890995,
-        "bleu_score": 0.003885058027132025,
-        "rouge_1": 0.10041840850825441,
-        "rouge_2": 0.011173183352423548,
-        "rouge_l": 0.10041840850825441,
-        "response_time": 1.3768107891082764
+        "length_ratio": 1.8571428571428572,
+        "jaccard_similarity": 0.125,
+        "bleu_score": 0.025927732347438295,
+        "rouge_1": 0.2553191440470802,
+        "rouge_2": 0.04347825602079449,
+        "rouge_l": 0.2553191440470802,
+        "response_time": 1.741708517074585
       }
     },
     {
@@ -49,26 +51,26 @@
       "v1_success": true,
       "v2_success": true,
       "v1_metrics": {
-        "response_length": 14292,
+        "response_length": 173,
         "expected_length": 74,
-        "length_ratio": 193.13513513513513,
-        "jaccard_similarity": 0.011204481792717087,
-        "bleu_score": 0.00110943542339991,
-        "rouge_1": 0.018543046070470595,
-        "rouge_2": 0.003072196468153693,
-        "rouge_l": 0.018543046070470595,
-        "response_time": 17.829128742218018
+        "length_ratio": 2.3378378378378377,
+        "jaccard_similarity": 0.16666666666666666,
+        "bleu_score": 0.028743137251195983,
+        "rouge_1": 0.23529411326989624,
+        "rouge_2": 0.05882352525951587,
+        "rouge_l": 0.23529411326989624,
+        "response_time": 1.3252806663513184
       },
       "v2_metrics": {
-        "response_length": 5259,
+        "response_length": 251,
         "expected_length": 74,
-        "length_ratio": 71.06756756756756,
-        "jaccard_similarity": 0.03543307086614173,
-        "bleu_score": 0.0016777949346644047,
-        "rouge_1": 0.03424657461742355,
-        "rouge_2": 0.003999999608000039,
-        "rouge_l": 0.03424657461742355,
-        "response_time": 2.021135091781616
+        "length_ratio": 3.391891891891892,
+        "jaccard_similarity": 0.16666666666666666,
+        "bleu_score": 0.023619218366939275,
+        "rouge_1": 0.24390243509815587,
+        "rouge_2": 0.047619043990929984,
+        "rouge_l": 0.24390243509815587,
+        "response_time": 1.4020867347717285
       }
     },
     {
@@ -78,26 +80,26 @@
       "v1_success": true,
       "v2_success": true,
       "v1_metrics": {
-        "response_length": 4267,
+        "response_length": 109,
         "expected_length": 115,
-        "length_ratio": 37.10434782608696,
-        "jaccard_similarity": 0.02280130293159609,
-        "bleu_score": 0.00438997644394143,
-        "rouge_1": 0.043076922140781085,
-        "rouge_2": 0.010771992193238369,
-        "rouge_l": 0.043076922140781085,
-        "response_time": 6.033195972442627
+        "length_ratio": 0.9478260869565217,
+        "jaccard_similarity": 0.03225806451612903,
+        "bleu_score": 0.013028389076628536,
+        "rouge_1": 0.062499995000000405,
+        "rouge_2": 0.0,
+        "rouge_l": 0.062499995000000405,
+        "response_time": 1.803006887435913
       },
       "v2_metrics": {
-        "response_length": 2284,
+        "response_length": 187,
         "expected_length": 115,
-        "length_ratio": 19.860869565217392,
-        "jaccard_similarity": 0.05235602094240838,
-        "bleu_score": 0.007588473734019455,
-        "rouge_1": 0.0845070408640261,
-        "rouge_2": 0.03508771830101572,
-        "rouge_l": 0.0845070408640261,
-        "response_time": 1.1870465278625488
+        "length_ratio": 1.626086956521739,
+        "jaccard_similarity": 0.02631578947368421,
+        "bleu_score": 0.011199617145528714,
+        "rouge_1": 0.051282046443129975,
+        "rouge_2": 0.0,
+        "rouge_l": 0.051282046443129975,
+        "response_time": 1.7839348316192627
       }
     },
     {
@@ -107,26 +109,26 @@
       "v1_success": true,
       "v2_success": true,
       "v1_metrics": {
-        "response_length": 3592,
+        "response_length": 109,
         "expected_length": 95,
-        "length_ratio": 37.810526315789474,
-        "jaccard_similarity": 0.02054794520547945,
-        "bleu_score": 0.0013230109330204605,
-        "rouge_1": 0.03921568546093385,
+        "length_ratio": 1.1473684210526316,
+        "jaccard_similarity": 0.07407407407407407,
+        "bleu_score": 0.018688671660841403,
+        "rouge_1": 0.20689654677764577,
         "rouge_2": 0.0,
-        "rouge_l": 0.03267973774851555,
-        "response_time": 6.226603269577026
+        "rouge_l": 0.13793102953626654,
+        "response_time": 1.214677333831787
       },
       "v2_metrics": {
-        "response_length": 1901,
+        "response_length": 187,
         "expected_length": 95,
-        "length_ratio": 20.010526315789473,
-        "jaccard_similarity": 0.03870967741935484,
-        "bleu_score": 0.003422869228665051,
-        "rouge_1": 0.06024096241181598,
-        "rouge_2": 0.008368199883055379,
-        "rouge_l": 0.06024096241181598,
-        "response_time": 1.3078501224517822
+        "length_ratio": 1.9684210526315788,
+        "jaccard_similarity": 0.058823529411764705,
+        "bleu_score": 0.013318664394769218,
+        "rouge_1": 0.16666666205246927,
+        "rouge_2": 0.0,
+        "rouge_l": 0.11111110649691378,
+        "response_time": 1.6011784076690674
       }
     },
     {
@@ -136,26 +138,26 @@
       "v1_success": true,
       "v2_success": true,
       "v1_metrics": {
-        "response_length": 14926,
+        "response_length": 156,
         "expected_length": 69,
-        "length_ratio": 216.31884057971016,
-        "jaccard_similarity": 0.009025270758122744,
-        "bleu_score": 0.000523802683174702,
-        "rouge_1": 0.017152658291854115,
+        "length_ratio": 2.260869565217391,
+        "jaccard_similarity": 0.0,
+        "bleu_score": 0,
+        "rouge_1": 0.0,
         "rouge_2": 0.0,
-        "rouge_l": 0.017152658291854115,
-        "response_time": 20.54578733444214
+        "rouge_l": 0.0,
+        "response_time": 1.2216980457305908
       },
       "v2_metrics": {
-        "response_length": 5941,
+        "response_length": 234,
         "expected_length": 69,
-        "length_ratio": 86.10144927536231,
-        "jaccard_similarity": 0.025974025974025976,
-        "bleu_score": 0.002138867711866739,
-        "rouge_1": 0.048979590979092054,
-        "rouge_2": 0.0049261078939067185,
-        "rouge_l": 0.048979590979092054,
-        "response_time": 2.131324052810669
+        "length_ratio": 3.391304347826087,
+        "jaccard_similarity": 0.0,
+        "bleu_score": 0,
+        "rouge_1": 0.0,
+        "rouge_2": 0.0,
+        "rouge_l": 0.0,
+        "response_time": 1.6364824771881104
       }
     }
   ]
