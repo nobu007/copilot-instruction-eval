@@ -72,10 +72,19 @@ def create_gui():
     stop_button = ttk.Button(control_frame, text="Stop Automation", command=stop_automation)
     stop_button.pack(side=tk.LEFT, padx=(0, 10))
     
+    # Cancel auto-start button
+    cancel_button = ttk.Button(control_frame, text="Cancel Auto-Start", command=cancel_auto_start)
+    cancel_button.pack(side=tk.LEFT, padx=(0, 10))
+    
     # Status label
-    status_var = tk.StringVar(value="Ready to start automation")
+    status_var = tk.StringVar(value="Preparing to auto-start in 30 seconds...")
     status_label = ttk.Label(control_frame, textvariable=status_var, font=("Arial", 10, "bold"))
     status_label.pack(side=tk.LEFT, padx=(20, 0))
+    
+    # Countdown label
+    countdown_var = tk.StringVar(value="30")
+    countdown_label = ttk.Label(control_frame, textvariable=countdown_var, font=("Arial", 14, "bold"), foreground="red")
+    countdown_label.pack(side=tk.LEFT, padx=(10, 0))
     
     # Log display area
     log_label = ttk.Label(main_frame, text="Automation Log:", font=("Arial", 10, "bold"))
@@ -89,6 +98,10 @@ def create_gui():
     gui_root.log_text = log_text
     gui_root.start_button = start_button
     gui_root.stop_button = stop_button
+    gui_root.cancel_button = cancel_button
+    gui_root.countdown_var = countdown_var
+    gui_root.countdown_remaining = 30
+    gui_root.auto_start_cancelled = False
     
     # Handle window close
     def on_closing():
@@ -152,14 +165,54 @@ def stop_automation():
     if gui_root:
         gui_root.status_var.set("Stopping automation...")
         gui_root.stop_button.config(state='disabled')
+        gui_root.cancel_button.config(state='disabled')
         
         # Re-enable start button after a delay
         def reset_buttons():
             if gui_root:
                 gui_root.start_button.config(state='normal')
+                gui_root.cancel_button.config(state='disabled')
                 gui_root.status_var.set("Automation stopped")
+                gui_root.countdown_var.set("")
         
         gui_root.after(2000, reset_buttons)
+
+def cancel_auto_start():
+    """Cancel the automatic start countdown"""
+    global gui_root
+    
+    if gui_root:
+        gui_root.auto_start_cancelled = True
+        gui_root.status_var.set("Auto-start cancelled. Ready to start manually.")
+        gui_root.countdown_var.set("")
+        gui_root.cancel_button.config(state='disabled')
+        gui_root.start_button.config(state='normal')
+
+def update_countdown():
+    """Update the countdown timer and auto-start when it reaches zero"""
+    global gui_root
+    
+    if gui_root is None or gui_root.auto_start_cancelled:
+        return
+    
+    try:
+        if gui_root.countdown_remaining > 0:
+            gui_root.countdown_var.set(str(gui_root.countdown_remaining))
+            gui_root.status_var.set(f"Auto-starting in {gui_root.countdown_remaining} seconds... (Please prepare: login, open VSCode Web, etc.)")
+            gui_root.countdown_remaining -= 1
+            
+            # Schedule next countdown update
+            gui_root.after(1000, update_countdown)
+        else:
+            # Countdown finished, start automation
+            gui_root.countdown_var.set("Starting!")
+            gui_root.status_var.set("Auto-starting automation now...")
+            gui_root.cancel_button.config(state='disabled')
+            start_automation()
+            
+    except tk.TclError:
+        # GUI has been destroyed
+        pass
 
 def run_automation():
     """Main automation logic (extracted from original main function)"""
@@ -355,6 +408,11 @@ def main():
     
     # Start GUI update loop
     update_gui()
+    
+    # Start countdown for auto-start (30 seconds)
+    logger.info("GUI started. Auto-start countdown begins: 30 seconds")
+    logger.info("Please prepare: login to VSCode Web, open the project, etc.")
+    gui_root.after(1000, update_countdown)  # Start countdown after 1 second
     
     # Start the GUI main loop
     try:
