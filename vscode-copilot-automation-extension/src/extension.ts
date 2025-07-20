@@ -15,19 +15,58 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.registerWebviewViewProvider(CopilotDebugProvider.viewType, debugProvider)
     );
 
-    // コマンド1: Copilotに自動プロンプト送信（VSCode Language Model API使用）
+    // コマンド1: Copilot Agent Modeに自動プロンプト送信
     let sendPromptCommand = vscode.commands.registerCommand('copilotAutomation.sendPrompt', async () => {
         try {
             const prompt = `Hello from VSCode Extension Automation!
-This message was sent by a VSCode extension using VSCode Language Model API!
-✅ Direct VSCode LM API access
-✅ No external screen capture needed
-✅ 100% reliable Copilot communication
-✅ Immune to UI theme/layout changes
+This message was sent by a VSCode extension using Copilot Agent Mode!
+✅ Direct Copilot Agent Mode access
+✅ Autonomous multi-file editing capability
+✅ Tool invocation and terminal command execution
+✅ Iterative problem-solving with auto-fix
 System executed at: ${new Date().toISOString()}`;
 
-            // 1. 利用可能なCopilotモデルを検索
-            console.log('🔍 Searching for available Copilot models...');
+            console.log('🤖 Starting Copilot Agent Mode automation...');
+            
+            // 1. Agent Mode設定の確認・有効化
+            const agentConfig = vscode.workspace.getConfiguration('chat.agent');
+            const isAgentEnabled = agentConfig.get('enabled', false);
+            
+            if (!isAgentEnabled) {
+                console.log('⚠️ Agent mode is not enabled. Attempting to enable...');
+                await agentConfig.update('enabled', true, vscode.ConfigurationTarget.Global);
+                vscode.window.showInformationMessage('Copilot Agent Mode has been enabled. Please restart VSCode for changes to take effect.');
+            }
+
+            // 2. Agent ModeでCopilot Chatを起動
+            console.log('🚀 Launching Copilot Agent Mode...');
+            
+            try {
+                // Agent ModeでChatを開く
+                await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+                
+                // 少し待ってからAgent Modeに切り替え
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Agent Modeに切り替えるコマンドを実行
+                await vscode.commands.executeCommand('workbench.action.chat.setMode', 'agent');
+                
+                console.log('✅ Successfully switched to Copilot Agent Mode');
+                
+            } catch (chatError) {
+                console.log('⚠️ Failed to open Copilot Chat panel, trying alternative approach:', chatError);
+                
+                // フォールバック: 直接Agent Mode URIを開く
+                try {
+                    await vscode.commands.executeCommand('vscode.open', vscode.Uri.parse('vscode://GitHub.Copilot-Chat/chat?mode=agent'));
+                    console.log('✅ Opened Agent Mode via direct URI');
+                } catch (uriError) {
+                    console.log('⚠️ Direct URI approach also failed:', uriError);
+                }
+            }
+
+            // 3. Language Model APIを使用したフォールバック通信
+            console.log('🔍 Searching for available Copilot models as fallback...');
             const allModels = await vscode.lm.selectChatModels();
             console.log(`Found ${allModels.length} total language models`);
 
@@ -45,20 +84,26 @@ System executed at: ${new Date().toISOString()}`;
             const selectedModel = copilotModels[0];
             console.log(`🤖 Using Copilot model: ${selectedModel.vendor}/${selectedModel.family}`);
 
-            // 2. Copilotモデルとチャット
-            const messages = [
-                vscode.LanguageModelChatMessage.User(prompt)
+            // 4. Agent Modeスタイルのプロンプトで通信
+            const agentStyleMessages = [
+                vscode.LanguageModelChatMessage.User(`You are now operating in Agent Mode. ${prompt}
+
+Please provide a response that demonstrates autonomous capabilities:
+1. Analyze the current workspace context
+2. Suggest specific file modifications or tool invocations
+3. Provide actionable next steps for automation
+4. Include any terminal commands that might be useful`)
             ];
 
-            console.log('💬 Sending message to Copilot...');
-            const chatRequest = await selectedModel.sendRequest(messages, {}, new vscode.CancellationTokenSource().token);
+            console.log('💬 Sending Agent Mode request to Copilot...');
+            const chatRequest = await selectedModel.sendRequest(agentStyleMessages, {}, new vscode.CancellationTokenSource().token);
             
             let response = '';
             for await (const fragment of chatRequest.text) {
                 response += fragment;
             }
 
-            console.log('📝 Copilot response received:', response.substring(0, 100) + '...');
+            console.log('📝 Agent Mode response received:', response.substring(0, 100) + '...');
 
             // 3. レスポンスをエディタに挿入
             const editor = vscode.window.activeTextEditor;
