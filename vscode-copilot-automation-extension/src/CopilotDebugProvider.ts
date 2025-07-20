@@ -1,14 +1,25 @@
 import * as vscode from 'vscode';
+import { CopilotService } from './services/CopilotService';
+import { ModelManager } from './services/ModelManager';
+import { ModeManager } from './services/ModeManager';
+import { UIManager } from './ui/UIManager';
 
 /**
  * Copilot Automation Debug WebView Provider
  * VSCode左ペインにデバッグ用のインターフェースを提供
+ * Enhanced with model selection and mode switching capabilities
  */
 export class CopilotDebugProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'copilotAutomation.debugView';
     
     private _view?: vscode.WebviewView;
     private _logs: string[] = [];
+    
+    // Enhanced services
+    private copilotService?: CopilotService;
+    private modelManager?: ModelManager;
+    private modeManager?: ModeManager;
+    private uiManager?: UIManager;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -29,6 +40,26 @@ export class CopilotDebugProvider implements vscode.WebviewViewProvider {
             ]
         };
 
+        // Use enhanced UI if UIManager is available, otherwise use legacy UI
+        if (this.uiManager) {
+            this.uiManager.setWebviewView(webviewView);
+            webviewView.webview.html = this.uiManager.getHtmlForWebview(webviewView.webview);
+            
+            // Handle messages through UIManager
+            webviewView.webview.onDidReceiveMessage(
+                async (message) => {
+                    if (this.uiManager) {
+                        await this.uiManager.handleMessage(message);
+                    }
+                },
+                undefined,
+            );
+            
+            console.log('✅ Enhanced UI with UIManager initialized');
+            return;
+        }
+        
+        // Fallback to legacy UI
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
         // Handle messages from the webview
@@ -354,5 +385,23 @@ Respond as if you have agent-level capabilities for autonomous code editing.`)
             </script>
         </body>
         </html>`;
+    }
+
+    // Enhanced service injection methods
+    public setCopilotService(service: CopilotService): void {
+        this.copilotService = service;
+    }
+
+    public setModelManager(manager: ModelManager): void {
+        this.modelManager = manager;
+    }
+
+    public setModeManager(manager: ModeManager): void {
+        this.modeManager = manager;
+    }
+
+    public setUIManager(manager: UIManager): void {
+        this.uiManager = manager;
+        console.log('🔧 UIManager set, will be used when WebView is initialized');
     }
 }

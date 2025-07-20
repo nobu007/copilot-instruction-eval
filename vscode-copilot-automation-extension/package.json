@@ -19,7 +19,10 @@
   },
   "activationEvents": [
     "onCommand:copilotAutomation.sendPrompt",
+    "onCommand:copilotAutomation.sendPromptToUI",
     "onCommand:copilotAutomation.getCopilotState",
+    "onCommand:copilotAutomation.switchMode",
+    "onCommand:copilotAutomation.selectModel",
     "onCommand:copilotAutomation.verifyPromptSent",
     "onView:copilotAutomation.debugView"
   ],
@@ -28,15 +31,33 @@
     "commands": [
       {
         "command": "copilotAutomation.sendPrompt",
-        "title": "Send Automated Prompt to Copilot"
+        "title": "Send Automated Prompt to Copilot",
+        "icon": "$(send)"
+      },
+      {
+        "command": "copilotAutomation.sendPromptToUI",
+        "title": "Send Prompt to Copilot UI",
+        "icon": "$(export)"
       },
       {
         "command": "copilotAutomation.getCopilotState",
-        "title": "Get Copilot Chat State"
+        "title": "Get Copilot State",
+        "icon": "$(info)"
+      },
+      {
+        "command": "copilotAutomation.switchMode",
+        "title": "Switch Copilot Mode (Agent/Chat)",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "copilotAutomation.selectModel",
+        "title": "Select Language Model",
+        "icon": "$(symbol-class)"
       },
       {
         "command": "copilotAutomation.verifyPromptSent",
-        "title": "Verify Prompt Was Sent to Copilot"
+        "title": "Verify Extension Status",
+        "icon": "$(check)"
       }
     ],
     "viewsContainers": {
@@ -51,9 +72,9 @@
     "views": {
       "copilotAutomation": [
         {
-          "type": "webview",
           "id": "copilotAutomation.debugView",
-          "name": "Debug Panel",
+          "name": "Copilot Automation",
+          "type": "webview",
           "when": "true"
         }
       ]

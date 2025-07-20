@@ -49,13 +49,23 @@ install: package
 		code --install-extension "$$VSIX_FILE"; \
 		echo "✅ Extension installed successfully!"; \
 		echo ""; \
-		echo "📋 Next steps:"; \
-		echo "1. Restart VSCode"; \
-		echo "2. Press Ctrl+Shift+P"; \
-		echo "3. Search for 'Send Automated Prompt to Copilot'"; \
+		echo "🔄 Reloading VSCode window..."; \
+		$(MAKE) reload-vscode; \
+		echo "✅ VSCode reloaded! Extension is ready to use."; \
 	else \
 		echo "❌ No VSIX file found!"; \
 		exit 1; \
+	fi
+
+# VSCodeウィンドウリロード
+reload-vscode:
+	@echo "🔄 Sending reload command to VSCode..."
+	@if command -v code >/dev/null 2>&1; then \
+		echo "Attempting to reload VSCode window..."; \
+		code --command "workbench.action.reloadWindow" 2>/dev/null || \
+		echo "⚠️  Could not auto-reload VSCode. Please manually reload with Ctrl+Shift+P -> 'Developer: Reload Window'"; \
+	else \
+		echo "⚠️  VSCode CLI not found. Please manually reload VSCode."; \
 	fi
 
 # 拡張機能アンインストール
