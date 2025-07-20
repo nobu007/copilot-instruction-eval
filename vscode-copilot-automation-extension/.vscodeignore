@@ -1,0 +1,31 @@
+# VSCode拡張機能パッケージから除外するファイル
+
+# ソースファイル（コンパイル済みのoutディレクトリのみ含める）
+src/**
+tsconfig.json
+*.ts
+
+# 開発・ビルド関連
+node_modules/**
+.git/**
+.gitignore
+*.vsix
+build-and-install.sh
+Makefile
+
+# ドキュメント・設定
+README.md
+.vscode/**
+.eslintrc.json
+.prettierrc
+
+# テスト関連
+test/**
+*.test.js
+*.test.ts
+
+# その他
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
