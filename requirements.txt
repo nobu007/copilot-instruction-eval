@@ -1,22 +1,3 @@
-pandas
-numpy
-python-dotenv
-tqdm
-matplotlib
-nltk
-rouge-score
-seaborn
+# Core dependencies for the VSCode Automation System
 requests
-
-# For GUI/Browser Automation
-selenium>=4.0.0
-webdriver-manager>=3.8.5
-undetected-chromedriver
-
-# For PyAutoGUI and Image Recognition
-pyautogui>=0.9.54
-opencv-python>=4.8.0
-Pillow>=10.0.0
-ultralytics>=8.0.0
-psutil>=5.9.0
-pynput>=1.7.6
+psutil

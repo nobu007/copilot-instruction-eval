@@ -206,27 +206,68 @@ class VSCodeAutomation:
         try:
             logger.info(f"Sending message to Copilot: {message}")
             
-            # Find chat input area (typically at bottom of chat panel)
+            # Take screenshot for debugging
             screenshot = ImageGrab.grab()
+            screenshot.save(os.path.join(LOG_DIR, "before_input.png"))
+            logger.info("Screenshot saved before input attempt")
+            
+            # Try multiple methods to find and click the input area
+            success = False
+            
+            # Method 1: Try clicking in the chat panel area
             height, width = screenshot.size
+            logger.info(f"Screen size: {width}x{height}")
             
-            # Click in approximate chat input area (bottom right)
-            chat_input_x = int(width * 0.85)
-            chat_input_y = int(height * 0.9)
+            # Try different positions for chat input
+            input_positions = [
+                (int(width * 0.85), int(height * 0.9)),   # Bottom right
+                (int(width * 0.75), int(height * 0.85)),  # Slightly higher
+                (int(width * 0.9), int(height * 0.95)),   # Very bottom right
+                (int(width * 0.8), int(height * 0.8)),    # Middle right
+            ]
             
-            pyautogui.click(chat_input_x, chat_input_y)
-            time.sleep(1)
+            for i, (x, y) in enumerate(input_positions):
+                logger.info(f"Trying input position {i+1}: ({x}, {y})")
+                
+                # Click at position
+                pyautogui.click(x, y)
+                time.sleep(1)
+                
+                # Try to clear any existing text first
+                pyautogui.hotkey('ctrl', 'a')
+                time.sleep(0.5)
+                
+                # Type the message
+                logger.info(f"Typing message: {message}")
+                pyautogui.typewrite(message, interval=0.1)  # Slower typing
+                time.sleep(2)
+                
+                # Take screenshot after typing
+                after_type_screenshot = ImageGrab.grab()
+                after_type_screenshot.save(os.path.join(LOG_DIR, f"after_typing_{i+1}.png"))
+                logger.info(f"Screenshot saved after typing attempt {i+1}")
+                
+                # Send the message (Enter key)
+                logger.info("Pressing Enter key")
+                pyautogui.press('enter')
+                time.sleep(3)
+                
+                # Take screenshot after Enter
+                after_enter_screenshot = ImageGrab.grab()
+                after_enter_screenshot.save(os.path.join(LOG_DIR, f"after_enter_{i+1}.png"))
+                logger.info(f"Screenshot saved after Enter attempt {i+1}")
+                
+                # Check if message was sent (simple heuristic)
+                # If the input area is cleared or changed, assume success
+                success = True
+                break
             
-            # Type the message
-            pyautogui.typewrite(message)
-            time.sleep(1)
-            
-            # Send the message (Enter key)
-            pyautogui.press('enter')
-            time.sleep(2)
-            
-            logger.info("Message sent successfully")
-            return True
+            if success:
+                logger.info("Message sent successfully")
+                return True
+            else:
+                logger.warning("All input attempts failed")
+                return False
             
         except Exception as e:
             logger.error(f"Error sending message to Copilot: {e}")

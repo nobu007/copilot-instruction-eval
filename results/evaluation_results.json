@@ -1,9 +1,9 @@
 {
-  "run_id": 5,
-  "timestamp": "2025-07-03T00:05:45.331840",
+  "run_id": 8,
+  "timestamp": "2025-07-19T21:00:32.936927",
   "config": {
-    "agent_v1_endpoint": null,
-    "agent_v2_endpoint": null,
+    "agent_v1_endpoint": "http://agent-v1.example.com/api/v1/complete",
+    "agent_v2_endpoint": "http://agent-v2.example.com/api/v1/complete",
     "agent_v2_model": null,
     "api_key_v1": "***REDACTED***",
     "api_key_v2": "***REDACTED***",
@@ -12,153 +12,53 @@
     "timeout": 60,
     "max_retries": 3,
     "retry_delay": 5,
-    "demo_mode": true
+    "demo_mode": false
   },
   "results": [
     {
       "instruction_id": "code_review_1",
       "instruction_type": "code_review",
       "difficulty": "medium",
-      "v1_success": true,
-      "v2_success": true,
-      "v1_metrics": {
-        "response_length": 156,
-        "expected_length": 126,
-        "length_ratio": 1.2380952380952381,
-        "jaccard_similarity": 0.15151515151515152,
-        "bleu_score": 0.035247858975832255,
-        "rouge_1": 0.2999999950000001,
-        "rouge_2": 0.05263157394736889,
-        "rouge_l": 0.2999999950000001,
-        "response_time": 1.5923643112182617
-      },
-      "v2_metrics": {
-        "response_length": 234,
-        "expected_length": 126,
-        "length_ratio": 1.8571428571428572,
-        "jaccard_similarity": 0.125,
-        "bleu_score": 0.025927732347438295,
-        "rouge_1": 0.2553191440470802,
-        "rouge_2": 0.04347825602079449,
-        "rouge_l": 0.2553191440470802,
-        "response_time": 1.741708517074585
-      }
+      "v1_success": false,
+      "v2_success": false,
+      "v1_metrics": {},
+      "v2_metrics": {}
     },
     {
       "instruction_id": "pr_creation_1",
       "instruction_type": "pr_creation",
       "difficulty": "easy",
-      "v1_success": true,
-      "v2_success": true,
-      "v1_metrics": {
-        "response_length": 173,
-        "expected_length": 74,
-        "length_ratio": 2.3378378378378377,
-        "jaccard_similarity": 0.16666666666666666,
-        "bleu_score": 0.028743137251195983,
-        "rouge_1": 0.23529411326989624,
-        "rouge_2": 0.05882352525951587,
-        "rouge_l": 0.23529411326989624,
-        "response_time": 1.3252806663513184
-      },
-      "v2_metrics": {
-        "response_length": 251,
-        "expected_length": 74,
-        "length_ratio": 3.391891891891892,
-        "jaccard_similarity": 0.16666666666666666,
-        "bleu_score": 0.023619218366939275,
-        "rouge_1": 0.24390243509815587,
-        "rouge_2": 0.047619043990929984,
-        "rouge_l": 0.24390243509815587,
-        "response_time": 1.4020867347717285
-      }
+      "v1_success": false,
+      "v2_success": false,
+      "v1_metrics": {},
+      "v2_metrics": {}
     },
     {
       "instruction_id": "bug_fix_1",
       "instruction_type": "bug_fix",
       "difficulty": "hard",
-      "v1_success": true,
-      "v2_success": true,
-      "v1_metrics": {
-        "response_length": 109,
-        "expected_length": 115,
-        "length_ratio": 0.9478260869565217,
-        "jaccard_similarity": 0.03225806451612903,
-        "bleu_score": 0.013028389076628536,
-        "rouge_1": 0.062499995000000405,
-        "rouge_2": 0.0,
-        "rouge_l": 0.062499995000000405,
-        "response_time": 1.803006887435913
-      },
-      "v2_metrics": {
-        "response_length": 187,
-        "expected_length": 115,
-        "length_ratio": 1.626086956521739,
-        "jaccard_similarity": 0.02631578947368421,
-        "bleu_score": 0.011199617145528714,
-        "rouge_1": 0.051282046443129975,
-        "rouge_2": 0.0,
-        "rouge_l": 0.051282046443129975,
-        "response_time": 1.7839348316192627
-      }
+      "v1_success": false,
+      "v2_success": false,
+      "v1_metrics": {},
+      "v2_metrics": {}
     },
     {
       "instruction_id": "refactor_1",
       "instruction_type": "refactoring",
       "difficulty": "easy",
-      "v1_success": true,
-      "v2_success": true,
-      "v1_metrics": {
-        "response_length": 109,
-        "expected_length": 95,
-        "length_ratio": 1.1473684210526316,
-        "jaccard_similarity": 0.07407407407407407,
-        "bleu_score": 0.018688671660841403,
-        "rouge_1": 0.20689654677764577,
-        "rouge_2": 0.0,
-        "rouge_l": 0.13793102953626654,
-        "response_time": 1.214677333831787
-      },
-      "v2_metrics": {
-        "response_length": 187,
-        "expected_length": 95,
-        "length_ratio": 1.9684210526315788,
-        "jaccard_similarity": 0.058823529411764705,
-        "bleu_score": 0.013318664394769218,
-        "rouge_1": 0.16666666205246927,
-        "rouge_2": 0.0,
-        "rouge_l": 0.11111110649691378,
-        "response_time": 1.6011784076690674
-      }
+      "v1_success": false,
+      "v2_success": false,
+      "v1_metrics": {},
+      "v2_metrics": {}
     },
     {
       "instruction_id": "test_case_1",
       "instruction_type": "test_creation",
       "difficulty": "medium",
-      "v1_success": true,
-      "v2_success": true,
-      "v1_metrics": {
-        "response_length": 156,
-        "expected_length": 69,
-        "length_ratio": 2.260869565217391,
-        "jaccard_similarity": 0.0,
-        "bleu_score": 0,
-        "rouge_1": 0.0,
-        "rouge_2": 0.0,
-        "rouge_l": 0.0,
-        "response_time": 1.2216980457305908
-      },
-      "v2_metrics": {
-        "response_length": 234,
-        "expected_length": 69,
-        "length_ratio": 3.391304347826087,
-        "jaccard_similarity": 0.0,
-        "bleu_score": 0,
-        "rouge_1": 0.0,
-        "rouge_2": 0.0,
-        "rouge_l": 0.0,
-        "response_time": 1.6364824771881104
-      }
+      "v1_success": false,
+      "v2_success": false,
+      "v1_metrics": {},
+      "v2_metrics": {}
     }
   ]
 }

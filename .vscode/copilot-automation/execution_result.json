@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "instruction_id": "test_001",
+  "response": "This is a mock response from Copilot for testing purposes.",
+  "execution_time": 2.5,
+  "timestamp": 1752988344.0304062,
+  "model": "copilot/gpt-4.1",
+  "mode": "agent"
+}

@@ -57,10 +57,8 @@ Communication is asynchronous and file-based to ensure loose coupling.
 
 The system's operation revolves around a defined directory structure within `/tmp/copilot-evaluation/`:
 
-- **/requests/**: Contains pending tasks for the VSCode extension. A file here represents a desired state.
-- **/responses/**: Contains the latest outcome (success or error) for a given request. A file here represents the current state.
-- **/failed/**: An audit log for requests that were abandoned by the client after multiple retries. The client copies the final failed response here.
-- **/eval/**: Used by a separate, asynchronous process to store the results of quality evaluations on successful responses. It is **not** part of the core IPC flow.
+- **/requests/**: The client places new task files here.
+- **/responses/**: The server writes the outcome of tasks here.
 
 ### 3.2. Request/Response Format
 
@@ -92,82 +90,123 @@ The system's operation revolves around a defined directory structure within `/tm
     }
     ```
 
-### 3.3. IPC Interaction Flow & Example
+### 3.3. IPC Interaction Flow
 
-The client's primary goal is to ensure every request in the `requests` directory eventually has a corresponding successful response. The files themselves are persistent records.
+The entire transaction is driven by the client. The server is a passive listener.
 
-**Lifecycle of `request-123`:**
+1. **Client:** Creates `requests/req-123.json`.
+2. **Server:** Detects the new file, reads it, and begins processing.
+3. **Server:** Upon completion, writes the result to `responses/req-123.json`.
+4. **Client:** Polls for `responses/req-123.json`, reads it, and confirms the task is done.
+5. **Client:** Deletes both `requests/req-123.json` and `responses/req-123.json` to complete the transaction.
 
-1. **Initial State:** The client submits a new request.
+This client-driven cleanup model is critical as it prevents race conditions and ensures that the client, which owns the overall workflow, is the sole authority on when a transaction is truly finished.
 
-    ```
+---
+
+## 4. Key Python Components (Client-Side)
+
+### 4.1. `VSCodeProcessManager`
+
+- **Purpose:** Manages the lifecycle of the singleton VSCode process.
+- **Key Functionality:**
+  - `get_vscode_process()`: Checks if a VSCode process for the target workspace is already running. If not, it launches a new one.
+  - **PID Management:** Correctly identifies the true VSCode process, ignoring wrapper scripts.
+  - **Singleton Enforcement:** Ensures only one VSCode instance per workspace is used by the automation system.
+
+### 4.2. `simple_continuous_executor.py`
+
+- **Purpose:** The main entry point and orchestration engine for running a sequence of instructions.
+- **Key Functionality:**
+  - **Instruction Loading:** Reads a series of tasks from a JSON file.
+  - **IPC Communication:** Uses an internal `IPCClient` to send requests and await responses.
+  - **Robust Execution Loop:** Iterates through instructions, calling the `_process_request_file` method for each one.
+  - **Error Handling & Timeouts:** Implements retry logic and handles timeouts for IPC responses.
+  - **Cleanup:** Contains the crucial `try...finally` block that guarantees the cleanup of request and response files, even if an error occurs.
+
+---
+
+## 5. Overall Execution Flow
+
+The end-to-end process is as follows:
+
+```mermaid
+sequenceDiagram
+    participant Client as Python Client
+    participant VSCode as VSCode Process
+    participant Extension as VSCode Extension
+
+    Client->>VSCode: 1. Launch if not running (via ProcessManager)
+    activate VSCode
+    VSCode->>Extension: 2. Activate Extension
+    activate Extension
+
+    Client->>Client: 3. Load instructions.json
+    loop For each instruction
+        Client->>Extension: 4. Write request file
+        Extension->>Extension: 5. Process command via VSCode API
+        Extension->>Client: 6. Write response file
+        Client->>Client: 7. Read response, handle result
+        Client->>Extension: 8. Clean up request & response files
+    end
+
+    Client->>VSCode: 9. (Optional) Terminate process
+    deactivate Extension
+    deactivate VSCode
+```
+
+1. **Client Submits Request:** The client's only job is to create the request file. It does not wait for a response.
+
+    ```bash
     /tmp/copilot-evaluation/
     └── requests/
         └── request-123.json
     ```
 
-2. **Attempt 1 Fails (Error Response):** The server responds with an error.
+2. **Server Processes Request:** The server detects `request-123.json`, attempts to execute it, and might retry on failure. After all attempts, it writes a single, final response and cleans up the original request.
 
-    ```
+3. **Scenario A: Success**
+
+    The server succeeds on one of its attempts. It writes a response file containing the full history and deletes the request file.
+
+    ```bash
     /tmp/copilot-evaluation/
-    ├── requests/
-    │   └── request-123.json
     └── responses/
-        └── request-123.json  (contains "status": "error")
+        └── request-123.json  (contains final_status: 'success' and all attempts)
     ```
 
-    The client reads this, **deletes `responses/request-123.json`**, and prepares to retry.
+4. **Scenario B: Terminal Failure**
 
-3. **Attempt 2 Succeeds:** The server processes the request correctly.
+    All server-side attempts fail. The server writes the final response, **copies that response to the `failed` directory**, and then deletes the original request file.
 
-    ```
+    ```bash
     /tmp/copilot-evaluation/
-    ├── requests/
-    │   └── request-123.json
-    └── responses/
-        └── request-123.json  (contains "status": "success")
-    ```
-
-    The client sees the success response and considers the task done. **No files are moved or deleted.** The final state is preserved as a record.
-
-4. **Alternative (Terminal Failure):** If a request fails 3 times, the client gives up.
-
-    ```
-    /tmp/copilot-evaluation/
-    ├── requests/
-    │   └── request-123.json
     ├── responses/
-    │   └── request-123.json  (the final error response)
+    │   └── request-123.json  (contains final_status: 'failed' and all attempts)
     └── failed/
         └── request-123.json  (a copy of the final failed response)
     ```
 
-    The client **copies** the last response to `failed/` and stops tracking `request-123`. The original files remain.
+    This ensures that every failed request is preserved for auditing, along with a complete record of what was tried.
 
 ---
 
-## 4. Client-Side State Management
+## 4. Server-Side State Management & Retry Logic
 
-The robustness of this system relies on the client's ability to manage the state of each request internally.
+The robustness of this system relies on the server's ability to autonomously handle transient failures.
 
-### 4.1. Core Principle: Client Owns the State
+### 4.1. Core Principle: Server Owns the Retries
 
-The file system reflects the desired state (`requests`) and the latest outcome (`responses`), but the client is responsible for tracking retry counts and terminal failures to drive the process.
+To simplify the client and centralize responsibility, all retry logic is handled by the server (the VSCode extension).
 
-### 4.2. Recommended Implementation
+- **Max Attempts:** The server will attempt each request a maximum of **2 times** (the initial attempt + 1 retry).
+- **Exponential Backoff:** A simple delay is implemented between retries (e.g., 2 seconds).
+- **Atomic Response:** The server only writes **one** response file at the very end of all attempts. This file contains a log of every attempt, whether it succeeded or failed.
+- **Failure Archival:** If all attempts fail, the server is responsible for copying the final, comprehensive response file to the `failed/` directory.
 
-A client should maintain an in-memory dictionary or state machine that maps each `request_id` to its current status, such as:
+This design makes the client extremely simple and places the responsibility for reliable execution squarely on the server, which is closer to the action.
 
-- `NEW`
-- `POLLING (attempt: 1)`
-- `POLLING (attempt: 2)`
-- `POLLING (attempt: 3)`
-- `SUCCESS`
-- `GAVE_UP`
-
-This prevents infinite loops and ensures each request is handled according to the defined logic, even if the client process is restarted.
-
-### 4.3. VSCode Cold Start (Proactive Prevention)
+### 4.2. VSCode Cold Start (Proactive Prevention)
 
 - **Problem:** Upon initial launch, the VSCode extension may be active but not fully initialized, leading to initial requests failing.
 - **Strategy:** As per memory `cdb228f2-9a13-4997-94f8-112b3b450cb4`, the client **must** implement a proactive delay.

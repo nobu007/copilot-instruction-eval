@@ -52,14 +52,7 @@ export class LogDisplayProvider implements vscode.WebviewViewProvider {
                     case 'exportLogs':
                         this.exportLogs();
                         break;
-                    case 'reprocessFailedRequests':
-                        this.reprocessFailedRequests();
-                        break;
-                    case 'reprocessRequest':
-                        if (message.requestId) {
-                            this.reprocessSingleRequest(message.requestId);
-                        }
-                        break;
+
                     case 'setLogLevel':
                         this.setLogLevel(message.level);
                         break;
@@ -173,60 +166,7 @@ export class LogDisplayProvider implements vscode.WebviewViewProvider {
         }
     }
     
-    private async reprocessFailedRequests() {
-        console.log('♻️ Starting reprocessFailedRequests...');
-        this.log('info', 'Starting reprocess all failed requests', 'reprocessing');
-        
-        try {
-            const handler = (global as any).enhancedFileRequestHandler;
-            console.log('🔍 Handler available:', !!handler);
-            
-            if (!handler) {
-                console.error('❌ File request handler not available');
-                vscode.window.showErrorMessage('File request handler not available');
-                this.log('error', 'File request handler not available', 'reprocessing');
-                return;
-            }
-            
-            const count = await handler.reprocessFailedRequests();
-            this.log('info', `Reprocessed ${count} failed requests`, 'reprocessing');
-            vscode.window.showInformationMessage(`Successfully reprocessed ${count} failed requests`);
-            
-        } catch (error) {
-            this.log('error', `Failed to reprocess requests: ${error}`, 'reprocessing');
-            vscode.window.showErrorMessage(`Failed to reprocess requests: ${error}`);
-        }
-    }
-    
-    private async reprocessSingleRequest(requestId: string) {
-        console.log(`🔄 Starting reprocessSingleRequest for: ${requestId}`);
-        this.log('info', `Starting reprocess single request: ${requestId}`, 'reprocessing');
-        
-        try {
-            const handler = (global as any).enhancedFileRequestHandler;
-            console.log('🔍 Handler available:', !!handler);
-            
-            if (!handler) {
-                console.error('❌ File request handler not available');
-                vscode.window.showErrorMessage('File request handler not available');
-                this.log('error', 'File request handler not available', 'reprocessing');
-                return;
-            }
-            
-            const success = await handler.reprocessRequest(requestId);
-            if (success) {
-                this.log('info', `Reprocessed request: ${requestId}`, 'reprocessing');
-                vscode.window.showInformationMessage(`Successfully reprocessed: ${requestId}`);
-            } else {
-                this.log('warn', `Failed to reprocess: ${requestId}`, 'reprocessing');
-                vscode.window.showWarningMessage(`Failed to reprocess: ${requestId}`);
-            }
-            
-        } catch (error) {
-            this.log('error', `Failed to reprocess ${requestId}: ${error}`, 'reprocessing');
-            vscode.window.showErrorMessage(`Failed to reprocess ${requestId}: ${error}`);
-        }
-    }
+
     
     private async setLogLevel(level: string) {
         const config = vscode.workspace.getConfiguration('copilotAutomation');
@@ -450,8 +390,6 @@ export class LogDisplayProvider implements vscode.WebviewViewProvider {
         <button onclick="refreshStatus()">🔄 Refresh</button>
         <button onclick="clearLogs()">🗑️ Clear Logs</button>
         <button onclick="exportLogs()">💾 Export Logs</button>
-        <button onclick="reprocessFailedRequests()" class="reprocess-btn">♻️ Reprocess All Failed</button>
-        <button onclick="showReprocessDialog()" class="reprocess-btn">🔄 Reprocess Single</button>
     </div>
     
     <div class="logs-container" id="logsContainer">

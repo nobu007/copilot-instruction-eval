@@ -1,0 +1,67 @@
+{
+  "environment": {
+    "platform": "linux",
+    "python_version": "3.11.6 (main, Jun 30 2025, 23:23:55) [GCC 14.2.0]",
+    "remote_type": "x11_forwarding"
+  },
+  "tests": [
+    {
+      "name": "Environment Setup",
+      "status": "passed",
+      "duration": 3.695487976074219e-05,
+      "details": {
+        "success": [
+          true,
+          {
+            "python_version": true,
+            "project_root_exists": true,
+            "requirements_exists": true,
+            "evaluation_script_exists": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "Dependencies Installation",
+      "status": "passed",
+      "duration": 1.3441333770751953,
+      "details": {
+        "success": true
+      }
+    },
+    {
+      "name": "Network Connectivity",
+      "status": "passed",
+      "duration": 0.1060791015625,
+      "details": {
+        "success": true
+      }
+    },
+    {
+      "name": "Recorder Availability",
+      "status": "passed",
+      "duration": 0.00017571449279785156,
+      "details": {
+        "success": true
+      }
+    },
+    {
+      "name": "Unit Tests",
+      "status": "passed",
+      "duration": 1.0509047508239746,
+      "details": {
+        "success": true
+      }
+    },
+    {
+      "name": "Evaluation Demo Mode",
+      "status": "passed",
+      "duration": 10.910682916641235,
+      "details": {
+        "success": true
+      }
+    }
+  ],
+  "overall_status": "passed",
+  "timestamp": "2025-07-02 20:50:33"
+}

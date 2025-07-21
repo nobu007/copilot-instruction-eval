@@ -1,0 +1,6 @@
+合計 20
+-rw-rw-r-- 1 jinno jinno 362  7月 21 17:15 bug_fix_1.json
+-rw-rw-r-- 1 jinno jinno 343  7月 21 17:15 code_review_1.json
+-rw-rw-r-- 1 jinno jinno 352  7月 21 17:15 pr_creation_1.json
+-rw-rw-r-- 1 jinno jinno 349  7月 21 17:15 refactor_1.json
+-rw-rw-r-- 1 jinno jinno 346  7月 21 17:15 test_case_1.json

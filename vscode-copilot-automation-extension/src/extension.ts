@@ -5,8 +5,9 @@ import { CopilotDebugProvider } from './CopilotDebugProvider';
 import { CopilotService } from './services/CopilotService';
 import { ModelManager } from './services/ModelManager';
 import { ModeManager, CopilotMode } from './services/ModeManager';
+import { CommandHandler } from './services/CommandHandler';
+import { IPCRequestHandler } from './IPCRequestHandler';
 import { UIManager } from './ui/UIManager';
-import { FileRequestHandler } from './FileRequestHandler';
 import { LogDisplayProvider } from './ui/LogDisplayProvider';
 import * as crypto from 'crypto';
 
@@ -138,35 +139,21 @@ export async function activate(context: vscode.ExtensionContext) {
         logDisplayProvider.log('info', 'Services initialized successfully', 'startup');
         console.log('✅ Services initialized successfully');
         
-        // Initialize Enhanced File Request Handler for evaluation framework
+        // Initialize new IPC and Command Handlers based on the new architecture
         const config = vscode.workspace.getConfiguration('copilotAutomation');
         const baseDirectory = config.get<string>('baseDirectory', '/tmp/copilot-evaluation');
-        const autoStart = config.get<boolean>('autoStart', true);
-        
-        logDisplayProvider.log('info', `Base directory configured: ${baseDirectory}`, 'config');
-        
-        const { EnhancedFileRequestHandler } = await import('./EnhancedFileRequestHandler');
-        const enhancedFileRequestHandler = new EnhancedFileRequestHandler(
-            copilotService,
-            modelManager,
-            modeManager,
-            baseDirectory,
-            logDisplayProvider
-        );
-        
-        if (autoStart) {
-            enhancedFileRequestHandler.start();
-            console.log('✅ Enhanced File Request Handler started automatically');
-        } else {
-            console.log('⏸️ Enhanced File Request Handler ready (not started)');
-        }
-        
-        // グローバルアクセス用にハンドラーを登録（UI再処理機能用）
-        (global as any).enhancedFileRequestHandler = enhancedFileRequestHandler;
+
+        logDisplayProvider.log('info', `IPC Base directory: ${baseDirectory}`, 'config');
+
+        const commandHandler = new CommandHandler(copilotService, modelManager, modeManager);
+        const ipcRequestHandler = new IPCRequestHandler(commandHandler, baseDirectory);
+
+        ipcRequestHandler.start();
+        console.log('✅ IPC Request Handler started.');
 
         // Register cleanup on deactivation
         context.subscriptions.push({
-            dispose: () => enhancedFileRequestHandler.stop()
+            dispose: () => ipcRequestHandler.stop()
         });
 
         // Register WebView Provider with enhanced functionality

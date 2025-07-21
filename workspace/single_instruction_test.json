@@ -1,0 +1,12 @@
+{
+  "instructions": [
+    {
+      "id": "single_test_001",
+      "type": "code_review",
+      "description": "Review the following Python function for potential security vulnerabilities and suggest improvements:\n\ndef process_user_input(user_data):\n    query = \"SELECT * FROM users WHERE name = '\" + user_data + \"'\"\n    return execute_query(query)",
+      "expected_response_type": "security_analysis",
+      "mode": "agent",
+      "model": "copilot/gpt-4"
+    }
+  ]
+}

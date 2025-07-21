@@ -7,7 +7,7 @@
   "chat": {
     "launcher": "a.action-label[aria-label='チャットの切り替え']",
     "input": "div.interactive-input-part textarea",
-    "submitButton": "a.action-label[aria-label='送信 (Enter)']",
+    "submit": "a.action-label[aria-label='送信 (Enter)']",
     "thinkingIndicator": "div.monaco-progress-container",
     "responseContainer": "div[class*='interactive-response-part']",
     "responseElement": "div.monaco-markdown"

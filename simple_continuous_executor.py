@@ -80,7 +80,7 @@ class SimpleCopilotExecutor:
             '/home/jinno/copilot-instruction-eval/vscode-copilot-automation-extension')
         self.vscode_command = config.get('vscode_command', 'code')
         self.execution_timeout = config.get('execution_timeout', 60)  # seconds
-        self.retry_attempts = config.get('retry_attempts', 3)
+
         
         # Initialize database
         self.db_path = config.get('db_path', 'simple_continuous_execution.db')
@@ -109,9 +109,7 @@ class SimpleCopilotExecutor:
             "mode": mode.value,
             "timeout": self.execution_timeout,
             "expected_elements": params.get("expected_elements", []),
-            "category": params.get("category", "general"),
-            "retry_count": params.get("retry_count", 0),
-            "max_retries": self.retry_attempts
+            "category": params.get("category", "general")
         }
 
     def _wait_for_extension_ready(self, timeout: int = 60):
@@ -211,16 +209,10 @@ class SimpleCopilotExecutor:
 
 
     def _send_prompt_to_copilot(self, instruction: 'Instruction', mode: ExecutionMode, model: str) -> Tuple[ExecutionStatus, str, float]:
-        """Send prompt to Copilot via file-based IPC and wait for response."""
+        """Send prompt to Copilot via file-based IPC by only placing the request file."""
         base_dir = '/tmp/copilot-evaluation'
         requests_dir = os.path.join(base_dir, 'requests')
-        responses_dir = os.path.join(base_dir, 'responses')
-        processed_dir = os.path.join(base_dir, 'processed')
-        failed_dir = os.path.join(base_dir, 'failed')
-        timed_out_dir = os.path.join(base_dir, 'timed_out')
-
-        for d in [requests_dir, responses_dir, processed_dir, failed_dir, timed_out_dir]:
-            os.makedirs(d, exist_ok=True)
+        os.makedirs(requests_dir, exist_ok=True)
 
         request_id = instruction['id']
         request_file = os.path.join(requests_dir, f"{request_id}.json")
@@ -228,70 +220,22 @@ class SimpleCopilotExecutor:
 
         try:
             instruction_text = instruction.get('description', '')
-            params = instruction.get('params', {})
             req = self._create_request(request_id, instruction_text, mode, model, instruction.get('params', {}))
-            
+
             with open(request_file, 'w', encoding='utf-8') as f:
                 json.dump(req, f, indent=2)
-            
-            logger.info(f"Request file created: {request_file}")
-            
-            result_file = os.path.join(responses_dir, f"{request_id}.json")
-            timeout_end = time.time() + self.execution_timeout
-            
-            while time.time() < timeout_end:
-                if os.path.exists(result_file):
-                    execution_time = time.time() - execution_start_time
-                    try:
-                        with open(result_file, 'r', encoding='utf-8') as f:
-                            result_data = json.load(f)
-                        
-                        if result_data.get('success'):
-                            response = result_data.get('response', 'No response content found.')
-                            logger.info(f"Successfully received response for {request_id}")
-                            os.rename(request_file, os.path.join(processed_dir, os.path.basename(request_file)))
-                            os.remove(result_file)
-                            return ExecutionStatus.SUCCESS, response, execution_time
-                        else:
-                            error_message = result_data.get('error_message', 'Unknown error from extension')
-                            logger.error(f"Extension reported failure for {request_id}: {error_message}")
-                            os.rename(request_file, os.path.join(failed_dir, os.path.basename(request_file)))
-                            os.remove(result_file)
-                            return ExecutionStatus.FAILED, error_message, execution_time
 
-                    except (json.JSONDecodeError, Exception) as e:
-                        logger.error(f"Error processing result file for {request_id}: {e}")
-                        os.rename(request_file, os.path.join(failed_dir, os.path.basename(request_file)))
-                        if os.path.exists(result_file):
-                            os.remove(result_file)
-                        return ExecutionStatus.ERROR, f"Error processing result: {e}", execution_time
-                time.sleep(1)
-            
-            logger.warning(f"Timeout waiting for extension response for request {request_id}")
-            os.rename(request_file, os.path.join(timed_out_dir, os.path.basename(request_file)))
+            execution_time = time.time() - execution_start_time
+            logger.info(f"Request file placed: {request_file} (took {execution_time:.4f}s)")
 
-            # Final cleanup for race condition where file is created just before timeout.
-            if os.path.exists(result_file):
-                logger.warning(f"A response file {result_file} was found after timeout. Cleaning it up.")
-                os.remove(result_file)
-
-            return ExecutionStatus.TIMEOUT, "Timeout waiting for extension response", self.execution_timeout
+            # The client's responsibility ends here. It returns a success status
+            # indicating the request was PLACED, not that it was completed.
+            return ExecutionStatus.SUCCESS, "Request placed successfully.", execution_time
 
         except Exception as e:
             execution_time = time.time() - execution_start_time
-            # Log the full stack trace to diagnose the underlying error
-            logger.error(f"❌ An unexpected error occurred in _send_prompt_to_copilot: {e}", exc_info=True)
-            
-            # --- Definitive resource leak fix ---
-            # Ensure both request and response files are cleaned up on any exception
-            if os.path.exists(request_file):
-                os.rename(request_file, os.path.join(failed_dir, os.path.basename(request_file)))
-            if 'result_file' in locals() and os.path.exists(result_file):
-                logger.error(f"Cleaning up orphaned response file due to error: {result_file}")
-                os.remove(result_file)
-            # -------------------------------------
-
-            return ExecutionStatus.ERROR, f"Unexpected error in send_prompt: {e}", execution_time
+            logger.error(f"❌ An unexpected error occurred while placing request: {e}", exc_info=True)
+            return ExecutionStatus.ERROR, f"Unexpected error placing request: {e}", execution_time
 
     def execute_instruction(self, instruction: 'Instruction', 
                           mode: ExecutionMode = ExecutionMode.AGENT,

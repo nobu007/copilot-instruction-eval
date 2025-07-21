@@ -1,0 +1,8 @@
+{
+  "id": "test_001",
+  "type": "test",
+  "prompt": "Hello, this is a test prompt for Copilot integration.",
+  "mode": "agent",
+  "model": "copilot/gpt-4.1",
+  "timestamp": 1752988344.0302222
+}
