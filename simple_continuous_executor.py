@@ -269,13 +269,28 @@ class SimpleCopilotExecutor:
             
             logger.warning(f"Timeout waiting for extension response for request {request_id}")
             os.rename(request_file, os.path.join(timed_out_dir, os.path.basename(request_file)))
+
+            # Final cleanup for race condition where file is created just before timeout.
+            if os.path.exists(result_file):
+                logger.warning(f"A response file {result_file} was found after timeout. Cleaning it up.")
+                os.remove(result_file)
+
             return ExecutionStatus.TIMEOUT, "Timeout waiting for extension response", self.execution_timeout
 
         except Exception as e:
             execution_time = time.time() - execution_start_time
-            logger.error(f"❌ An unexpected error occurred in _send_prompt_to_copilot: {e}")
+            # Log the full stack trace to diagnose the underlying error
+            logger.error(f"❌ An unexpected error occurred in _send_prompt_to_copilot: {e}", exc_info=True)
+            
+            # --- Definitive resource leak fix ---
+            # Ensure both request and response files are cleaned up on any exception
             if os.path.exists(request_file):
                 os.rename(request_file, os.path.join(failed_dir, os.path.basename(request_file)))
+            if 'result_file' in locals() and os.path.exists(result_file):
+                logger.error(f"Cleaning up orphaned response file due to error: {result_file}")
+                os.remove(result_file)
+            # -------------------------------------
+
             return ExecutionStatus.ERROR, f"Unexpected error in send_prompt: {e}", execution_time
 
     def execute_instruction(self, instruction: 'Instruction', 
@@ -371,158 +386,147 @@ class SimpleCopilotExecutor:
         except Exception as e:
             logger.error(f"❌ Failed to save result: {e}")
 
-    def run(self, 
-            mode: ExecutionMode = ExecutionMode.AGENT,
-            model: str = "copilot/gpt-4",
-            instruction_filter: Optional[List[str]] = None):
-        """Run continuous execution of all instructions."""
+    def _process_request_file(self, filepath: str, mode: ExecutionMode, model: str):
+        """
+        Processes a single request file with robust error handling and logging.
+        This is the single source of truth for request processing.
+        """
+        filename = os.path.basename(filepath)
+        request_dir = os.path.dirname(filepath)
+        base_dir = os.path.dirname(request_dir)
+        failed_dir = os.path.join(base_dir, 'failed')
+        response_dir = os.path.join(base_dir, 'responses')
         
-        instructions_to_execute = self.instructions
-        if instruction_filter:
-            instructions_to_execute = [
-                inst for inst in self.instructions 
-                if inst.get('id') in instruction_filter
-            ]
+        logger.info(f"--- Processing request file: {filename} ---")
         
-        logger.info(f"📋 Executing {len(instructions_to_execute)} instructions")
-        
-        for i, instruction in enumerate(instructions_to_execute, 1):
-            logger.info(f"[INSTRUCTION {i}/{len(instructions_to_execute)}]")
-            self.execute_instruction(instruction, mode, model)
-            logger.info(f"[INSTRUCTION {i}/{len(instructions_to_execute)} COMPLETE]")
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                instruction = json.load(f)
+            logger.info(f"File {filename} read successfully.")
+
+            # Basic validation
+            if 'id' not in instruction or 'description' not in instruction:
+                raise ValueError("Request missing required fields 'id' or 'description'")
+            logger.info(f"File {filename} validated successfully.")
             
-            if i < len(instructions_to_execute):
-                logger.info("--- Pausing for 2 seconds ---")
-                self.execution_completed = True
-        logger.info("All instructions processed.")
+            # This is the core execution call
+            self.execute_instruction(instruction, mode, model)
+            logger.info(f"--- Finished processing {filename} successfully ---")
 
-    def run_once(self, mode: ExecutionMode = ExecutionMode.AGENT, model: str = "copilot/gpt-4"):
-        """Scans the request directory and processes each request file once."""
-        request_dir = self.config.get('request_dir', '/tmp/copilot-evaluation/requests')
-        failed_dir = os.path.join(os.path.dirname(request_dir), 'failed')
-        os.makedirs(failed_dir, exist_ok=True)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in {filepath}: {e}. Moving to 'failed' directory.")
+            shutil.move(filepath, os.path.join(failed_dir, filename))
+        except (ValueError, KeyError) as e:
+            logger.error(f"Invalid request data in {filepath}: {e}. Moving to 'failed' directory.")
+            shutil.move(filepath, os.path.join(failed_dir, filename))
+        except Exception as e:
+            logger.critical(f"An unexpected error occurred while processing {filepath}: {e}", exc_info=True)
+            # Ensure both the request and any potential response file are cleaned up.
+            shutil.move(filepath, os.path.join(failed_dir, filename))
+            
+            response_file = os.path.join(response_dir, filename)
+            if os.path.exists(response_file):
+                logger.warning(f"Cleaning up orphaned response file from failed request: {response_file}")
+                os.remove(response_file)
 
-        logger.info(f"Scanning for requests in {request_dir}")
-        request_files = [f for f in os.listdir(request_dir) if f.endswith('.json')]
-
-        if not request_files:
-            logger.info("No new requests found.")
-            return
-
-        for filename in request_files:
-            filepath = os.path.join(request_dir, filename)
-            logger.info(f"Processing request file: {filepath}")
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    instruction = json.load(f)
-                # Basic validation
-                if 'request_id' not in instruction or 'instruction' not in instruction:
-                    raise ValueError("Request missing required fields 'request_id' or 'instruction'")
-                
-                self.execute_instruction(instruction, mode, model)
-
-            except json.JSONDecodeError:
-                logger.error(f"Invalid JSON in {filepath}. Moving to 'failed' directory.")
-                shutil.move(filepath, os.path.join(failed_dir, filename))
-            except (ValueError, KeyError) as e:
-                logger.error(f"Invalid request data in {filepath}: {e}. Moving to 'failed' directory.")
-                shutil.move(filepath, os.path.join(failed_dir, filename))
-            except Exception as e:
-                logger.critical(f"An unexpected error occurred while processing {filepath}: {e}", exc_info=True)
-                shutil.move(filepath, os.path.join(failed_dir, filename))
+    def run(self, run_once: bool, mode: ExecutionMode, model: str, poll_interval: int = 5):
+        """
+        The single, unified execution loop.
+        Scans for requests and processes them using _process_request_file.
         
-        logger.info("Finished processing all files in the request directory.")
+        Args:
+            run_once: If True, the loop runs once and exits. Otherwise, runs continuously.
+            mode: The execution mode (agent or chat).
+            model: The model to use.
+            poll_interval: Seconds to wait between scans in continuous mode.
+        """
+        request_dir = self.config.get('request_dir', '/tmp/copilot-evaluation/requests')
+
+        while True:
+            logger.info(f"Scanning for requests in {request_dir}")
+            try:
+                request_files = [f for f in os.listdir(request_dir) if f.endswith('.json')]
+                if not request_files:
+                    logger.info("No new requests found.")
+                else:
+                    for filename in request_files:
+                        filepath = os.path.join(request_dir, filename)
+                        self._process_request_file(filepath, mode, model)
+            except Exception as e:
+                logger.error(f"Error during request scanning loop: {e}", exc_info=True)
+
+            if run_once:
+                logger.info("Run-once mode finished. Exiting loop.")
+                break
+            
+            logger.info(f"Waiting for {poll_interval} seconds before next scan...")
+            time.sleep(poll_interval)
 
     def generate_report(self):
-        """Generate execution report"""
-        try:
-            total_instructions = len(self.results)
-            if total_instructions == 0:
-                logger.info("No results to generate a report.")
-                return
+        """Generate a summary report of the execution results"""
+        if not self.results:
+            logger.info("No results to generate a report.")
+            return
 
-            successful = len([r for r in self.results if r.status == ExecutionStatus.SUCCESS])
-            failed = len([r for r in self.results if r.status == ExecutionStatus.FAILED])
-            errors = len([r for r in self.results if r.status == ExecutionStatus.ERROR])
-            
-            avg_execution_time = sum(r.execution_time for r in self.results) / total_instructions if total_instructions > 0 else 0
-            success_rate = (successful / total_instructions * 100) if total_instructions > 0 else 0
-            
-            report = f"""
-# Simple Continuous Execution Report
+        total_executions = len(self.results)
+        success_count = sum(1 for r in self.results if r.status == ExecutionStatus.SUCCESS)
+        failed_count = sum(1 for r in self.results if r.status != ExecutionStatus.SUCCESS)
+        avg_exec_time = sum(r.execution_time for r in self.results) / total_executions if total_executions > 0 else 0
 
-## Summary
-- **Total Instructions**: {total_instructions}
-- **Successful**: {successful}
-- **Failed**: {failed}
-- **Errors**: {errors}
-- **Success Rate**: {success_rate:.1f}%
-- **Average Execution Time**: {avg_execution_time:.2f}s
+        logger.info("\n--- Execution Report ---")
+        logger.info(f"Total Executions: {total_executions}")
+        logger.info(f"  - Success: {success_count}")
+        logger.info(f"  - Failed:  {failed_count}")
+        logger.info(f"Average Execution Time: {avg_exec_time:.2f} seconds")
+        logger.info("----------------------\n")
 
-## Results
-"""
-            
-            for result in self.results:
-                report += f"- **{result.instruction_id}**: {result.status.value} ({result.execution_time:.2f}s)\n"
-            
-            report_file = 'simple_continuous_execution_report.md'
-            with open(report_file, 'w', encoding='utf-8') as f:
-                f.write(report)
-            
-            logger.info(f"📊 Report generated: {report_file}")
-            print(report)
-            
-        except Exception as e:
-            logger.error(f"❌ Report generation failed: {e}")
 
-def main(args):
-    """Main execution function"""
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Simple, Unified VSCode Copilot Executor")
+    parser.add_argument('--run-once', action='store_true', help='Run the executor once and exit.')
+    parser.add_argument('--mode', type=str, choices=['agent', 'chat'], default='agent', help='Execution mode for Copilot.')
+    parser.add_argument('--model', type=str, default='copilot/gpt-4', help='Model to use for execution.')
+    args = parser.parse_args()
+
     config = {
-        'extension_path': args.extension_path,
-        'vscode_command': args.vscode_command,
-        'execution_timeout': args.timeout,
-        'retry_attempts': args.retries,
-        'db_path': args.db_path
+        'db_path': 'simple_continuous_execution.db',
+        'execution_timeout': 120,
+        'request_dir': '/tmp/copilot-evaluation/requests'
     }
     
     executor = SimpleCopilotExecutor(config)
     
+    # --- Main Execution Block ---
+    execution_mode_log = "Run-Once" if args.run_once else "Continuous"
+    logger.info(f"=================================================")
+    logger.info(f"  Starting Copilot Executor in {execution_mode_log} Mode")
+    logger.info(f"=================================================")
+
     try:
-        logger.info("Ensuring VSCode singleton is running via VSCodeProcessManager...")
+        logger.info("Ensuring VSCode singleton is running...")
         executor.vscode_manager.ensure_singleton_running()
+        pid, _ = executor.vscode_manager.get_status()
+        logger.info(f"✅ VSCode is running with PID: {pid}")
 
-        # Verify the status and get the PID correctly
-        pid, is_running = executor.vscode_manager.get_status()
-        if not is_running:
-            logger.critical("❌ VSCode process is not running after ensuring it started. Aborting.")
-            return
-        logger.info(f"✅ VSCode Process Manager reports singleton is running with PID: {pid}")
-
-        # Add a hardcoded wait for extension to warm up, addressing the 'cold start' problem.
-        logger.info("Waiting 20 seconds for the extension to cold start and initialize...")
+        logger.info("Waiting 20 seconds for the extension to cold start...")
         time.sleep(20)
-
+        
         executor._wait_for_extension_ready()
 
-        if args.run_once:
-            executor.run_once()
-        else:
-            executor.run(instruction_filter=args.instructions)
-
-    except Exception as e:
-        logger.critical(f"An unhandled error occurred: {e}", exc_info=True)
+        # The single, unified run call
+        executor.run(
+            run_once=args.run_once,
+            mode=ExecutionMode(args.mode),
+            model=args.model
+        )
+            
+    except (Exception, KeyboardInterrupt) as e:
+        logger.error(f"A critical error occurred in the main execution block: {e}", exc_info=True)
     finally:
-        logger.info("Requesting VSCode singleton shutdown via VSCodeProcessManager...")
+        logger.info("Execution finished. Requesting VSCode singleton shutdown...")
         executor.vscode_manager.shutdown_singleton()
-        
         executor.generate_report()
-        logger.info("Execution finished.")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Simple VSCode Copilot Continuous Execution System")
-    parser.add_argument('--extension-path', type=str, default='/home/jinno/copilot-instruction-eval/vscode-copilot-automation-extension', help='Path to the VSCode extension.')
-    parser.add_argument('--vscode-command', type=str, default='code', help='The command to run VSCode.')
+        logger.info("Executor has shut down gracefully.")
     parser.add_argument('--timeout', type=int, default=120, help='Execution timeout for each instruction.')
     parser.add_argument('--retries', type=int, default=3, help='Number of retries for each instruction.')
     parser.add_argument('--db-path', type=str, default='simple_continuous_execution.db', help='Path to the SQLite database.')
