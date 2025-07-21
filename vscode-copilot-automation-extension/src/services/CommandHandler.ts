@@ -33,6 +33,8 @@ export class CommandHandler {
 
         try {
             switch (command.command) {
+                case 'ping':
+                    return await this.handlePing();
                 case 'submitPrompt':
                     return await this.handleSubmitPrompt(command.params);
                 case 'setMode':
@@ -77,6 +79,13 @@ export class CommandHandler {
         } else {
             return { success: false, error: `Failed to switch to mode ${params.mode}` };
         }
+    }
+
+    private async handlePing(): Promise<CommandResult> {
+        return {
+            success: true,
+            data: { message: 'pong' },
+        };
     }
 
     private async handleGetCurrentState(): Promise<CommandResult> {

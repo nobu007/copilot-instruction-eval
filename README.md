@@ -15,6 +15,51 @@ For a deep dive into the system's design, please see the [**Architecture Guide**
 3. **`instructions.json`:**
    A file where you define the prompts and tasks you want Copilot to execute.
 
+## 🚀 Quick Start
+
+### システム動作確認
+
+システムが正常に動作しているか確認するには：
+
+```bash
+# 1. 基本ヘルスチェック（推奨）
+python3 scripts/health_check.py
+
+# 2. 簡単なデモ実行
+python3 scripts/demo.py --mode automatic
+
+# 3. 包括的検証（詳細テスト）
+python3 scripts/comprehensive_validation.py --quick
+```
+
+期待される結果：
+```
+🏥 SYSTEM STATUS: 🟢 HEALTHY (100%)
+🏆 OVERALL SYSTEM STATUS: 🟢 EXCELLENT (100.0%)
+```
+
+### 基本的な使用方法
+
+```bash
+# シンプルな実行テスト
+python3 simple_executor_test.py
+
+# カスタム指示での実行
+# instructions.json を編集して実行
+python3 simple_continuous_executor.py --run-once --mode chat
+```
+
+## 📋 動作確認スクリプト一覧
+
+| スクリプト | 用途 | 実行時間 | 推奨頻度 |
+|-----------|------|----------|----------|
+| `scripts/health_check.py` | システム全体の基本動作確認 | ~2秒 | 毎日 |
+| `scripts/demo.py` | 主要機能のデモンストレーション | ~3分 | 週次 |
+| `scripts/comprehensive_validation.py` | 詳細な機能検証 | ~1分 | 月次 |
+| `simple_executor_test.py` | 実際の指示実行テスト | ~30秒 | 随時 |
+
+詳細な運用方法は [**運用ガイド**](./docs/OPERATION_GUIDE.md) を参照してください。
+
 ## Getting Started
 
 ### Prerequisites
