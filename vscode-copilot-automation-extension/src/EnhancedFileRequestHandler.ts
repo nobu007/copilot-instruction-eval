@@ -159,38 +159,34 @@ export class EnhancedFileRequestHandler {
     public start(): void {
         this.log('info', 'Starting enhanced file request handler...', 'startup');
         this.log('info', `Watching directory: ${this.requestsDir}`, 'startup');
-        console.log('🔍 Starting enhanced file request handler...');
-        console.log(`📁 Watching directory: ${this.requestsDir}`);
+        console.log('✅ [FileRequestHandler] Starting. Watching directory:', this.requestsDir);
         
         // 未処理リクエストの復旧処理
         this.recoverPendingRequests();
         
         // Watch for new request files
         this.watcher = fs.watch(this.requestsDir, (eventType, filename) => {
-            // 総合的なデバッグログを追加
             this.log('debug', `File system event: type=${eventType}, filename=${filename}`, 'watcher');
 
-            if (filename && filename.endsWith('.json')) {
+            // On Linux, 'rename' is often the event for file creation.
+            // We check for filename and .json extension to be sure.
+            if (eventType === 'rename' && filename && filename.endsWith('.json')) {
+                console.log(`[FileRequestHandler] File event detected: ${filename}`);
                 const filePath = path.join(this.requestsDir, filename);
 
-                // ファイル書き込み完了を待つための短い遅延
+                // Short delay to ensure the file write is complete before processing.
                 setTimeout(() => {
-                    try {
-                        if (fs.existsSync(filePath)) {
-                            this.log('info', `New request file detected: ${filename}`, 'watcher');
-                            
-                            // 非同期処理のエラーを確実にキャッチ
-                            this.processRequestFile(filePath).catch(error => {
-                                this.log('error', `Unhandled error in processRequestFile for ${filename}: ${error}`, 'watcher');
-                            });
-
-                        } else {
-                            this.log('debug', `File ${filename} disappeared before processing.`, 'watcher');
-                        }
-                    } catch (err) {
-                        this.log('error', `Error in watcher callback for ${filename}: ${err}`, 'watcher');
+                    if (fs.existsSync(filePath)) {
+                        this.log('info', `Request file created: ${filename}`, 'watcher');
+                        this.processRequestFile(filePath).catch(error => {
+                            this.log('error', `Error processing file ${filename}: ${error}`, 'watcher');
+                        });
+                    } else {
+                        // This can happen if the file is created and moved/deleted quickly.
+                        // It's not necessarily an error, but worth logging for debug purposes.
+                        this.log('debug', `File ${filename} was gone before it could be processed.`, 'watcher');
                     }
-                }, 100); // 100msの遅延を追加
+                }, 150); // Increased delay slightly for more stability
             }
         });
         
@@ -287,15 +283,15 @@ export class EnhancedFileRequestHandler {
             // リトライカウントをリセット
             request.retry_count = 0;
             request.timestamp = new Date().toISOString();
-            
+                    
             // requestsディレクトリに移動して再処理
-            const newRequestFile = path.join(this.requestsDir, `${requestId}.json`);
+            const newRequestFile = path.join(this.requestsDir, `${request.request_id}.json`);
             fs.writeFileSync(newRequestFile, JSON.stringify(request, null, 2));
-            
+                    
             // 元のfailedファイルを削除
             fs.unlinkSync(failedFile);
-            
-            console.log(`♻️ Reprocessing single request: ${requestId}`);
+                    
+            console.log(` Reprocessing: ${request.request_id}`);
             return true;
             
         } catch (error) {
@@ -337,12 +333,54 @@ export class EnhancedFileRequestHandler {
     private async processRequestFile(filePath: string, isRecovery: boolean = false): Promise<void> {
         let requestId = 'unknown';
         try {
-            console.log(`🚀 Processing request file: ${path.basename(filePath)}`);
-            
-            // Read request
-            const requestData = fs.readFileSync(filePath, 'utf8');
-            const request: EvaluationRequest = JSON.parse(requestData);
-            requestId = request.request_id;
+            console.log(`[FileRequestHandler] Processing request file: ${path.basename(filePath)}`);
+            // Read and parse request with dedicated error handling
+            let request: EvaluationRequest;
+            try {
+                const requestData = fs.readFileSync(filePath, 'utf8');
+                if (requestData.trim() === '') {
+                    this.log('warn', `Request file is empty: ${path.basename(filePath)}`, 'processing');
+                    fs.unlinkSync(filePath); // Delete empty file
+                    return;
+                }
+                request = JSON.parse(requestData);
+                requestId = request.request_id;
+            } catch (error: any) {
+                this.log('error', `Failed to parse JSON from ${path.basename(filePath)}: ${error.message}`, 'processing');
+                const corruptedDir = path.join(this.failedDir, 'corrupted');
+                if (!fs.existsSync(corruptedDir)) {
+                    fs.mkdirSync(corruptedDir, { recursive: true });
+                }
+                const destination = path.join(corruptedDir, path.basename(filePath));
+                fs.renameSync(filePath, destination);
+                this.log('warn', `Moved corrupted file to ${destination}`, 'processing');
+                return; // Stop processing this file
+            }
+
+            // Health check endpoint: If prompt is 'ping', respond immediately and stop.
+            if (request.prompt === 'ping') {
+                console.log(`[FileRequestHandler] Received ping request: ${requestId}. Responding with pong.`);
+                const startTime = new Date();
+                const pongResponse: EvaluationResponse = {
+                    request_id: requestId,
+                    timestamp: new Date().toISOString(),
+                    success: true,
+                    execution_time: new Date().getTime() - startTime.getTime(),
+                    response: 'pong',
+                    model_used: 'health-check',
+                    mode_used: 'health-check',
+                    response_length: 4,
+                    error_message: null,
+                    retry_count: 0,
+                    request_timestamp: request.timestamp,
+                };
+                await this.saveResponse(pongResponse);
+                console.log(`[FileRequestHandler] Pong response queued for ${requestId}.`);
+                // Clean up the original request file as it's now processed.
+                // fs.unlinkSync(filePath);
+                return;
+            }
+
             
             this.log('info', `Processing request: ${request.prompt.substring(0, 100)}...`, 'processing', requestId);
             
@@ -407,12 +445,12 @@ export class EnhancedFileRequestHandler {
             this.saveProcessingState();
             
             // 処理済みファイル削除
-            fs.unlinkSync(processingFilePath);
+            // fs.unlinkSync(processingFilePath);
             
             this.log('info', 'Request completed successfully', 'completion', requestId);
             
         } catch (error) {
-            this.log('error', `Error processing request: ${error}`, 'error', requestId);
+            console.log(`[FileRequestHandler] Error processing request: ${error}`);
             await this.handleProcessingError(filePath, error);
         }
     }
@@ -449,6 +487,8 @@ export class EnhancedFileRequestHandler {
                     return false;
                 }
             }
+            
+
             
             return true;
             
@@ -534,13 +574,17 @@ export class EnhancedFileRequestHandler {
     }
     
     private async saveResponse(response: EvaluationResponse): Promise<void> {
-        // Save response (unified filename)
-        const baseFileName = response.request_id.replace('req_', '');
-        const responseFileName = `${baseFileName}.json`;
+        const responseFileName = `${response.request_id}.json`;
         const responseFilePath = path.join(this.responsesDir, responseFileName);
         
-        fs.writeFileSync(responseFilePath, JSON.stringify(response, null, 2));
-        console.log(`💾 Response saved: ${responseFileName}`);
+        try {
+            console.log(`[FileRequestHandler] Writing response for ${response.request_id} to ${responseFilePath}`);
+            fs.writeFileSync(responseFilePath, JSON.stringify(response, null, 2));
+            console.log(`[FileRequestHandler] Successfully wrote response for ${response.request_id}.`);
+        } catch (error) {
+            console.error(`[FileRequestHandler] FAILED to write response for ${response.request_id}:`, error);
+            this.log('error', `Failed to write response file: ${error}`, 'io', response.request_id);
+        }
     }
     
     private async handleProcessingError(filePath: string, error: any): Promise<void> {
