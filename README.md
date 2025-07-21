@@ -1,103 +1,73 @@
 # GitHub Copilot Agent Evaluation
 
-This repository contains tools and scripts for evaluating different versions of GitHub Copilot agents. It provides a framework for comparing the performance of agent versions using predefined instructions and metrics.
+This project provides a framework for evaluating and comparing different versions of GitHub Copilot Agents. It automates the process of sending instructions to agents, collecting their responses, and analyzing the results using various metrics.
 
-## 🚀 Getting Started
+## Features
+
+- **Automated Evaluation:** Runs predefined tasks (`code_review`, `bug_fix`, etc.) on multiple agents.
+- **Performance Metrics:** Calculates scores like BLEU and ROUGE to objectively measure performance.
+- **Comparative Reporting:** Generates reports and visualizations to compare agent capabilities.
+- **Extensible:** Easily add new evaluation instructions or agents.
+- **GUI and CLI:** Supports both a command-line script (`evaluate_agents.py`) and a GUI-based evaluation tool (`gui_evaluation_script.py`).
+
+## Getting Started
 
 ### Prerequisites
 
-- Python 3.8+
-- pip (Python package manager)
-- Access to GitHub Copilot agent APIs (v1 and v2)
+- Python 3.9+
+- Git
 
-### Installation
+### Setup
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/copilot-instruction-eval.git
-   cd copilot-instruction-eval
-   ```
+1. **Clone the repository:**
 
-2. Create and activate a virtual environment (recommended):
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+    ```bash
+    git clone <repository_url>
+    cd copilot-instruction-eval
+    ```
 
-3. Install the required packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
+2. **Install dependencies:**
 
-4. Set up environment variables:
-   - Copy `.env.example` to `.env`
-   - Update the `.env` file with your API endpoints and keys
+    Create a virtual environment (recommended) and install the required packages.
 
-## 📋 Project Structure
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+    pip install -r requirements.txt
+    ```
 
-```
-copilot-instruction-eval/
-├── .env.example           # Example environment variables
-├── requirements.txt       # Python dependencies
-├── instructions.json      # Evaluation instructions and test cases
-├── evaluate_agents.py     # Main evaluation script
-├── test_evaluation.py     # Test cases for the evaluation setup
-└── results/               # Directory for evaluation results (created automatically)
-```
+3. **Configure environment variables:**
 
-## 🛠 Usage
+    Copy the example environment file and fill in your API keys and endpoints.
 
-### Running the Evaluation
+    ```bash
+    cp .env.example .env
+    ```
 
-To run the evaluation with the default settings:
+    Now, edit the `.env` file with your actual credentials.
+
+## How to Run
+
+### Command-Line Evaluation
+
+To run the full evaluation suite from the command line:
 
 ```bash
 python evaluate_agents.py
 ```
 
-### Testing the Setup
+The results, including logs and comparison charts, will be saved in the `results/` directory.
 
-To verify that everything is set up correctly, run the test suite:
+### GUI-Based Evaluation
+
+For interactive evaluation, you can use the GUI script:
 
 ```bash
-python -m pytest test_evaluation.py -v
+python gui_evaluation_script.py
 ```
 
-## 📊 Evaluation Process
+This will launch a Tkinter window allowing you to send instructions and view agent responses in real-time.
 
-The evaluation process works as follows:
+## License
 
-1. Loads instructions from `instructions.json`
-2. Sends each instruction to both agent versions (v1 and v2)
-3. Collects and compares the responses
-4. Calculates metrics such as response similarity and response time
-5. Generates a CSV report in the `results/` directory
-
-## 📝 Customizing Instructions
-
-Edit the `instructions.json` file to add, modify, or remove test cases. Each instruction should include:
-
-- `id`: Unique identifier
-- `type`: Type of task (e.g., code_review, bug_fix)
-- `title`: Short title for the instruction
-- `description`: Detailed description of the task
-- `code`: (Optional) Code snippet for the task
-- `requirements`: (Optional) List of requirements for the task
-- `expected_response`: (Optional) Expected response for automated evaluation
-- `difficulty`: Difficulty level (easy/medium/hard)
-
-## 📈 Metrics
-
-The evaluation script calculates the following metrics:
-
-- **Jaccard Similarity**: Measures the similarity between the agent's response and the expected response
-- **Response Length**: Length of the response in characters
-- **Response Time**: Time taken to get a response from the agent
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the `LICENSE` file for details.
