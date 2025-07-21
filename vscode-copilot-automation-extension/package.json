@@ -3,6 +3,7 @@
   "displayName": "Copilot Automation Extension",
   "description": "VSCode extension for automated Copilot interaction and verification",
   "version": "0.0.1",
+  "publisher": "windsurf-dev",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -18,13 +19,19 @@
     "url": "https://github.com/your-repo/vscode-copilot-automation-extension/issues"
   },
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:copilotAutomation.sendPrompt",
     "onCommand:copilotAutomation.sendPromptToUI",
     "onCommand:copilotAutomation.getCopilotState",
     "onCommand:copilotAutomation.switchMode",
     "onCommand:copilotAutomation.selectModel",
     "onCommand:copilotAutomation.verifyPromptSent",
-    "onView:copilotAutomation.debugView"
+    "onCommand:copilotAutomation.executeBatchPrompt",
+    "onCommand:copilotAutomation.getExecutionStatus",
+    "onCommand:copilotAutomation.exportResults",
+    "onView:copilotAutomation.debugView",
+    "onView:copilotAutomation.logDisplay",
+    "onCommand:windsurf-dev.copilot-automation-extension.shutdown"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -56,26 +63,90 @@
       },
       {
         "command": "copilotAutomation.verifyPromptSent",
-        "title": "Verify Extension Status",
+        "title": "Verify Prompt Was Sent to Copilot",
         "icon": "$(check)"
+      },
+      {
+        "command": "copilotAutomation.executeBatchPrompt",
+        "title": "Execute Batch Prompt (CLI)",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "copilotAutomation.getExecutionStatus",
+        "title": "Get Execution Status (CLI)",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "copilotAutomation.exportResults",
+        "title": "Export Results to File (CLI)",
+        "icon": "$(export)"
+      },
+      {
+        "command": "windsurf-dev.copilot-automation-extension.shutdown",
+        "title": "Shutdown VSCode Instance (Internal)",
+        "icon": "$(close)"
       }
     ],
+
+    "configuration": {
+      "title": "Copilot Automation",
+      "properties": {
+        "copilotAutomation.baseDirectory": {
+          "type": "string",
+          "default": "/tmp/copilot-evaluation",
+          "description": "Base directory for file-based evaluation system"
+        },
+        "copilotAutomation.logLevel": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error"],
+          "default": "info",
+          "description": "Log level for extension output"
+        },
+        "copilotAutomation.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start file monitoring on extension activation"
+        },
+        "copilotAutomation.pollingInterval": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000,
+          "description": "Polling interval for file monitoring in milliseconds (100-10000ms)"
+        },
+        "copilotAutomation.maintenanceInterval": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 5000,
+          "maximum": 300000,
+          "description": "Maintenance interval for cleanup operations in milliseconds (5-300s)"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "copilotAutomation",
+          "id": "copilot-automation",
           "title": "Copilot Automation",
-          "icon": "$(robot)"
+          "icon": "$(hubot)"
         }
       ]
     },
     "views": {
-      "copilotAutomation": [
+      "copilot-automation": [
         {
           "id": "copilotAutomation.debugView",
-          "name": "Copilot Automation",
+          "name": "Copilot Debug",
           "type": "webview",
-          "when": "true"
+          "when": "true",
+          "icon": "$(debug)"
+        },
+        {
+          "id": "copilotAutomation.logDisplay",
+          "name": "Activity Monitor",
+          "type": "webview",
+          "when": "true",
+          "icon": "$(pulse)"
         }
       ]
     }

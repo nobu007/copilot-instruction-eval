@@ -57,21 +57,16 @@ install: package
 		exit 1; \
 	fi
 
-# VSCodeウィンドウリロード
+# VSCodeウィンドウリロード (via Singleton Manager)
 reload-vscode:
-	@echo "🔄 Sending reload command to VSCode..."
-	@if command -v code >/dev/null 2>&1; then \
-		echo "Attempting to reload VSCode window..."; \
-		code --command "workbench.action.reloadWindow" 2>/dev/null || \
-		echo "⚠️  Could not auto-reload VSCode. Please manually reload with Ctrl+Shift+P -> 'Developer: Reload Window'"; \
-	else \
-		echo "⚠️  VSCode CLI not found. Please manually reload VSCode."; \
-	fi
+	@echo "🔄 Safely reloading VSCode via Singleton Process Manager..."
+	@python3 ../scripts/reload_helper.py
 
 # 拡張機能アンインストール
 uninstall:
 	@echo "🗑️ Uninstalling existing extension..."
 	@code --uninstall-extension undefined_publisher.copilot-automation-extension || true
+	@code --uninstall-extension windsurf-dev.copilot-automation-extension || true
 
 # 再インストール
 reinstall: uninstall install

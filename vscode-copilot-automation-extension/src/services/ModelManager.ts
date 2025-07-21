@@ -77,31 +77,60 @@ export class ModelManager {
      * 選択されたモデルでChatModelを取得
      */
     public async getSelectedChatModel(): Promise<vscode.LanguageModelChat | null> {
-        if (!this.selectedModel) {
-            // デフォルトでCopilotを選択
-            await this.refreshAvailableModels();
-            const copilotModel = this.availableModels.find(m => 
-                m.vendor.toLowerCase().includes('copilot') || 
-                m.name.toLowerCase().includes('copilot')
-            );
-            if (copilotModel) {
-                this.selectModel(copilotModel.id);
-            }
-        }
-
-        if (this.selectedModel) {
-            try {
-                const models = await vscode.lm.selectChatModels({ 
-                    vendor: this.selectedModel.vendor,
-                    family: this.selectedModel.family
-                });
-                return models.find(m => m.id === this.selectedModel!.id) || models[0] || null;
-            } catch (error) {
-                console.error('Failed to get selected chat model:', error);
+        try {
+            // まず利用可能なモデルを取得
+            const allModels = await vscode.lm.selectChatModels();
+            console.log(`Available Language Models: ${allModels.length}`);
+            
+            if (allModels.length === 0) {
+                console.warn('No language models available. Please ensure GitHub Copilot is enabled.');
                 return null;
             }
+            
+            // 利用可能なモデルをログ出力
+            allModels.forEach(model => {
+                console.log(`- ${model.name} (${model.vendor}/${model.family}) ID: ${model.id}`);
+            });
+            
+            // 選択されたモデルがある場合、それを使用
+            if (this.selectedModel) {
+                const targetModel = allModels.find(m => m.id === this.selectedModel!.id);
+                if (targetModel) {
+                    console.log(`Using selected model: ${targetModel.name}`);
+                    return targetModel;
+                }
+            }
+            
+            // デフォルトで最初の利用可能なモデルを使用
+            const defaultModel = allModels[0];
+            console.log(`Using default model: ${defaultModel.name} (${defaultModel.id})`);
+            
+            // 内部状態も更新
+            this.availableModels = allModels.map(model => ({
+                id: model.id,
+                name: model.name,
+                vendor: model.vendor,
+                family: model.family,
+                version: model.version,
+                maxInputTokens: model.maxInputTokens
+            }));
+            
+            this.selectedModel = {
+                id: defaultModel.id,
+                name: defaultModel.name,
+                vendor: defaultModel.vendor,
+                family: defaultModel.family,
+                version: defaultModel.version,
+                maxInputTokens: defaultModel.maxInputTokens
+            };
+            
+            return defaultModel;
+            
+        } catch (error) {
+            console.error('Failed to get chat model:', error);
+            console.error('Please check GitHub Copilot authentication and permissions.');
+            return null;
         }
-        return null;
     }
 
     /**

@@ -1,0 +1,5 @@
+{
+  "command": "sendPrompt",
+  "args": "{\"prompt\": \"Create unit tests for the authentication service with 100% branch coverage.\", \"mode\": \"agent\", \"model\": \"copilot/gpt-4\"}",
+  "timestamp": "2025-07-21T13:24:41.641281"
+}
