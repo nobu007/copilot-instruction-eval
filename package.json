@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node evaluation_script.js",
     "dry-run": "node evaluation_script.js --headless=false --max-prompts=2",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "sec:allow-scripts": "npx @lavamoat/allow-scripts auto"
   },
   "keywords": [
     "puppeteer",

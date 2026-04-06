@@ -87,7 +87,6 @@
         "icon": "$(close)"
       }
     ],
-
     "configuration": {
       "title": "Copilot Automation",
       "properties": {
@@ -98,7 +97,12 @@
         },
         "copilotAutomation.logLevel": {
           "type": "string",
-          "enum": ["debug", "info", "warn", "error"],
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
           "default": "info",
           "description": "Log level for extension output"
         },
@@ -154,7 +158,8 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "sec:allow-scripts": "npx @lavamoat/allow-scripts auto"
   },
   "devDependencies": {
     "@types/vscode": "^1.74.0",
