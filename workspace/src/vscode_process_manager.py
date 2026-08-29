@@ -35,8 +35,9 @@ logger = logging.getLogger(__name__)
 class VSCodeProcessManager:
     """VSCode Desktopプロセスをシングルトンサーバーとして管理するクラス"""
 
-    def __init__(self, workspace_path: str):
+    def __init__(self, workspace_path: str, extension_path: Optional[str] = None):
         self.workspace_path = os.path.abspath(workspace_path)
+        self.extension_path = os.path.abspath(extension_path) if extension_path else None
         self.extension_id = "windsurf-dev.copilot-automation-extension"
         self.pid_file_path = os.path.join(os.path.dirname(__file__), ".vscode_manager.pid")
         self.vscode_executable = self._find_vscode_executable()
@@ -123,22 +124,29 @@ class VSCodeProcessManager:
             # --new-window フラグは、既存のウィンドウで開くのを防ぐために重要
             # 致命的な欠陥の修正: --disable-extensions を削除し、拡張機能が確実に読み込まれるようにする
             # さらに、特定の拡張機能だけを有効にする方がより安全であるため、--enable-extensions を使用
-            cmd = [self.vscode_executable, self.workspace_path, '--new-window', '--enable-extensions']
+            cmd = [self.vscode_executable, self.workspace_path, '--new-window']
+            if self.extension_path:
+                cmd.extend(['--extensionDevelopmentPath', self.extension_path])
+                logger.info(f"   with Development Extension: {self.extension_path}")
             subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             logger.info(f"✅ VSCode launch command issued. Waiting for main process to appear...")
 
             # ポーリングで真のプロセスPIDを見つける (タイムアウト付き)
             found_pid = None
-            for _ in range(30): # 最大30秒待機
+            wait_timeout = 60 # タイムアウトを60秒に延長
+            logger.info(f"⏳ Waiting up to {wait_timeout} seconds for main process...")
+            for i in range(wait_timeout):
                 pid, is_running = self.get_status()
                 if is_running:
                     found_pid = pid
-                    logger.info(f"✅ Found main VSCode process with PID {found_pid}.")
+                    logger.info(f"✅ Found main VSCode process with PID {found_pid} after {i+1} seconds.")
                     break
                 time.sleep(1)
+                if (i + 1) % 10 == 0:
+                    logger.info(f"   ... still waiting ({i+1}s elapsed)")
             
             if not found_pid:
-                raise RuntimeError("VSCode main process did not appear within 30 seconds.")
+                raise RuntimeError(f"VSCode main process did not appear within {wait_timeout} seconds.")
 
 
 
