@@ -197,3 +197,6 @@ cython_debug/
 chrome_user_data/*
 copilot-recorder-poc/*
 evaluation_logs/*
+
+#  Harness agent worktrees (transient git worktree sessions, never commit)
+/worktrees/
