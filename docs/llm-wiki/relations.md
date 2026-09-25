@@ -3,8 +3,7 @@ Repository: copilot-instruction-eval
 
 ## 階層関係（エスカレーション経路）
 
-- 親: business_operation_notes（推定・jinno確定待ち）
-- 根拠: GitHub Copilot 自動化という開発作業の仕組みを作るツール群であり、特定事業の商品ではなく開発インフラ・実験に分類される。
-- 出典: README.md、原則 llm-wiki-discipline の drafts-are-status-marked（状態表示付き草案）。
+- 親: business_operation_notes（jinno確定 2026-09-26）
+- 根拠: Copilot 自動化という開発作業の仕組みを作るツール群
+- 出典: contracts registry `registry/organization/repositories/copilot-instruction-eval.yaml` の spec.parent（contracts commit ecbc226）。2026-09-26 の一括レビュー表（/home/jinno/output/repo-parent-review-2026-09-26.md）を jinno が現状案で承認。
 
-- Observation: 上記の親は推定草案であり、jinno確定後に contracts registry の spec.parent へ反映される。provider/consumer の検証済み関係はまだない。
